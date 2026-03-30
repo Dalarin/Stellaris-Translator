@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm create:*)",
+      "Read(//c/Program Files/**)",
+      "Read(//c/Users/artem/AppData/Roaming/**)",
+      "Read(//c//**)",
+      "Read(//c/Users/artem/**)",
+      "Bash(cmd.exe /c \"where node 2>&1\")",
+      "Bash(powershell.exe -Command \"Get-Command node -ErrorAction SilentlyContinue | Select-Object Source\")",
+      "Bash(cmd.exe /c \"where node\")",
+      "Bash(cmd.exe /c \"where node && node --version\")",
+      "Bash(echo \"exit: $?\")",
+      "Bash(CURSOR_NODE=\"/c/Users/artem/AppData/Local/Programs/cursor/resources/app/resources/helpers/node.exe\")",
+      "Bash(\"$CURSOR_NODE\" --version)",
+      "Bash(grep -r \"$\\\\|variable\\\\|substitut\" --include=\"*.ts\" --include=\"*.tsx\" -n)"
+    ]
+  }
+}

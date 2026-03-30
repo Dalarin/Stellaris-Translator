@@ -1,0 +1,24 @@
+import { renderColorCodes } from '@/parser/colorCodes'
+import { cn } from '@/lib/utils'
+
+interface Props {
+  text: string
+  className?: string
+  placeholder?: string
+}
+
+export function ColorCodePreview({ text, className, placeholder }: Props) {
+  if (!text) {
+    return (
+      <span className={cn('text-muted-foreground italic', className)}>
+        {placeholder ?? ''}
+      </span>
+    )
+  }
+
+  return (
+    <span className={cn('font-mono text-sm leading-relaxed', className)}>
+      {renderColorCodes(text)}
+    </span>
+  )
+}
