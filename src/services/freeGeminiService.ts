@@ -10,6 +10,8 @@ import type { TranslationEntry } from '@/types'
 export type FreeTranslateProgress =
   | { type: 'translating'; current: number; total: number; translatedCount: number }
   | { type: 'rpm_wait'; secondsLeft: number; current: number; total: number }
+  | { type: 'switching_key'; reason: 'rpm' | 'exhausted'; current: number; total: number; keyIndex: number; totalKeys: number }
+  | { type: 'network_error'; attempt: number; maxAttempts: number; current: number; total: number }
 
 export interface FreeTranslateResult {
   total: number
@@ -44,8 +46,10 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 async function callWithNetworkRetry(
   fn: () => Promise<string>,
   signal?: AbortSignal,
+  onRetry?: (attempt: number, maxAttempts: number) => void,
 ): Promise<string> {
-  for (let attempt = 0; attempt <= NETWORK_RETRY_DELAYS_MS.length; attempt++) {
+  const maxAttempts = NETWORK_RETRY_DELAYS_MS.length + 1
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
       return await fn()
     } catch (err) {
@@ -54,6 +58,7 @@ async function callWithNetworkRetry(
       if (e.code === 429) throw e // handled by outer loop
       const isLast = attempt >= NETWORK_RETRY_DELAYS_MS.length
       if (!e.isRetryable || isLast) throw e
+      onRetry?.(attempt + 1, maxAttempts)
       await sleep(NETWORK_RETRY_DELAYS_MS[attempt], signal)
     }
   }
@@ -126,7 +131,9 @@ export async function autoTranslateFree(
             contents: [{ role: 'user', parts: [{ text: `Файл: ${fileName}\n\n${yml}` }] }],
           })
           return response.text ?? ''
-        }, signal)
+        }, signal, (attempt, maxAttempts) => {
+          onProgress({ type: 'network_error', attempt, maxAttempts, current: i + 1, total: chunks.length })
+        })
         break // success
       } catch (err) {
         if (signal?.aborted) throw err
@@ -138,6 +145,7 @@ export async function autoTranslateFree(
 
         if (decision.action === 'abort') {
           // RPD exhausted on this key — remove it and try the next
+          onProgress({ type: 'switching_key', reason: 'exhausted', current: i + 1, total: chunks.length, keyIndex: pool.currentIndex, totalKeys: pool.totalCount })
           const hasMore = pool.exhaustCurrent()
           if (!hasMore) {
             return { total: translatedCount, isComplete: false, processedChunks: i, totalChunks: chunks.length }
@@ -147,6 +155,7 @@ export async function autoTranslateFree(
         } else {
           // RPM throttle — mark this key tried, rotate to next
           triedInRound.add(pool.currentIndex)
+          onProgress({ type: 'switching_key', reason: 'rpm', current: i + 1, total: chunks.length, keyIndex: pool.currentIndex, totalKeys: pool.totalCount })
           pool.rotateNext()
 
           if (!triedInRound.has(pool.currentIndex)) {
