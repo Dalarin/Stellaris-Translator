@@ -2,6 +2,7 @@ import { cn } from '@/lib/utils'
 
 interface Props {
   value: number // 0-100
+  outdatedValue?: number | null,
   className?: string
   showLabel?: boolean
   size?: 'sm' | 'md'
@@ -15,7 +16,7 @@ export function ProgressBar({ value, className, showLabel = false, size = 'sm' }
     <div className={cn('flex items-center gap-2', className)}>
       <div
         className={cn(
-          'flex-1 overflow-hidden rounded-full bg-muted',
+          'flex-1 overflow-hidden rounded-full bg-muted', // Добавили relative
           size === 'sm' ? 'h-1.5' : 'h-2.5'
         )}
       >

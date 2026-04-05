@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useReducer } from 'react'
-import type { TranslationFile, TranslationEntry } from '@/types'
+import type { TranslationFile, TranslationEntry, StatusFilter } from '@/types'
 
-export type StatusFilter = 'all' | 'translated' | 'outdated' | 'missing'
+export type { StatusFilter }
 
 interface EditorState {
   activeFile: TranslationFile | null
@@ -16,79 +16,99 @@ type EditorAction =
   | { type: 'SET_ACTIVE_ENTRY'; payload: TranslationEntry | null }
   | { type: 'UPDATE_ENTRY_TEXT'; payload: { key: string; text: string } }
   | { type: 'MARK_ENTRY_TRANSLATED'; payload: string }
+  | { type: 'MARK_ENTRY_APPROVED'; payload: string }
+  | { type: 'MARK_ENTRY_UNTRANSLATED'; payload: string }
   | { type: 'SET_STATUS_FILTER'; payload: StatusFilter }
   | { type: 'SET_DIRTY'; payload: boolean }
   | { type: 'SET_SEARCH_QUERY'; payload: string }
   | { type: 'SYNC_FILE'; payload: TranslationFile }
 
-function editorReducer(state: EditorState, action: EditorAction): EditorState {
-  switch (action.type) {
-    case 'SET_ACTIVE_FILE':
-      return {
-        ...state,
-        activeFile: action.payload,
-        activeEntry: null,
-        dirty: false,
-        searchQuery: '',
-      }
-    case 'SET_ACTIVE_ENTRY':
-      return { ...state, activeEntry: action.payload }
-    case 'UPDATE_ENTRY_TEXT': {
-      if (!state.activeFile) return state
-      const entries = state.activeFile.entries.map((e) =>
-        e.key === action.payload.key
-          ? { ...e, translatedText: action.payload.text }
-          : e
-      )
-      const updatedFile = { ...state.activeFile, entries }
-      const updatedEntry =
-        state.activeEntry?.key === action.payload.key
-          ? { ...state.activeEntry, translatedText: action.payload.text }
-          : state.activeEntry
-      return {
-        ...state,
-        activeFile: updatedFile,
-        activeEntry: updatedEntry,
-        dirty: true,
-      }
-    }
-    case 'MARK_ENTRY_TRANSLATED': {
-      if (!state.activeFile) return state
-      const entries = state.activeFile.entries.map((e) =>
-        e.key === action.payload
-          ? { ...e, status: 'translated' as const }
-          : e
-      )
-      const updatedFile = { ...state.activeFile, entries }
-      const updatedEntry =
-        state.activeEntry?.key === action.payload
-          ? { ...state.activeEntry, status: 'translated' as const }
-          : state.activeEntry
-      return {
-        ...state,
-        activeFile: updatedFile,
-        activeEntry: updatedEntry,
-        dirty: true,
-      }
-    }
-    case 'SET_STATUS_FILTER':
-      return { ...state, statusFilter: action.payload }
-    case 'SET_DIRTY':
-      return { ...state, dirty: action.payload }
-    case 'SET_SEARCH_QUERY':
-      return { ...state, searchQuery: action.payload }
-    case 'SYNC_FILE':
-      return {
-        ...state,
-        activeFile: action.payload,
-        activeEntry: state.activeEntry
-          ? action.payload.entries.find((e) => e.key === state.activeEntry!.key) ?? null
-          : null,
-      }
-    default:
-      return state
+// ─── Utility types ────────────────────────────────────────────────────────────
+
+type ActionPayload<T extends EditorAction['type']> =
+  Extract<EditorAction, { type: T }> extends { payload: infer P } ? P : never
+
+type HandlerMap = {
+  [T in EditorAction['type']]: (state: EditorState, payload: ActionPayload<T>) => EditorState
+}
+
+// ─── Shared helper ────────────────────────────────────────────────────────────
+
+function patchEntry(
+  state: EditorState,
+  key: string,
+  patch: Partial<TranslationEntry>,
+): EditorState {
+  if (!state.activeFile) return state
+
+  const entries = state.activeFile.entries.map((e) =>
+    e.key === key ? { ...e, ...patch } : e,
+  )
+  const activeEntry =
+    state.activeEntry?.key === key
+      ? { ...state.activeEntry, ...patch }
+      : state.activeEntry
+
+  return {
+    ...state,
+    activeFile: { ...state.activeFile, entries },
+    activeEntry,
+    dirty: true,
   }
 }
+
+// ─── Per-action pure handlers ─────────────────────────────────────────────────
+
+const handlers: HandlerMap = {
+  SET_ACTIVE_FILE: (state, payload) => ({
+    ...state,
+    activeFile: payload,
+    activeEntry: null,
+    dirty: false,
+    searchQuery: '',
+  }),
+
+  SET_ACTIVE_ENTRY: (state, payload) => ({ ...state, activeEntry: payload }),
+
+  UPDATE_ENTRY_TEXT: (state, payload) =>
+    patchEntry(state, payload.key, { translatedText: payload.text }),
+
+  MARK_ENTRY_TRANSLATED: (state, payload) =>
+    patchEntry(state, payload, { status: 'translated' }),
+
+  MARK_ENTRY_APPROVED: (state, payload) =>
+    patchEntry(state, payload, { status: 'approved' }),
+
+  MARK_ENTRY_UNTRANSLATED: (state, payload) =>
+    patchEntry(state, payload, { status: 'missing' }),
+
+  SET_STATUS_FILTER: (state, payload) => ({ ...state, statusFilter: payload }),
+
+  SET_DIRTY: (state, payload) => ({ ...state, dirty: payload }),
+
+  SET_SEARCH_QUERY: (state, payload) => ({ ...state, searchQuery: payload }),
+
+  SYNC_FILE: (state, payload) => ({
+    ...state,
+    activeFile: payload,
+    activeEntry: state.activeEntry
+      ? (payload.entries.find((e) => e.key === state.activeEntry!.key) ?? null)
+      : null,
+    dirty: true,
+  }),
+}
+
+// ─── Reducer ──────────────────────────────────────────────────────────────────
+
+function editorReducer(state: EditorState, action: EditorAction): EditorState {
+  const handler = handlers[action.type] as (
+    state: EditorState,
+    payload: unknown,
+  ) => EditorState
+  return handler(state, 'payload' in action ? action.payload : undefined)
+}
+
+// ─── Context ──────────────────────────────────────────────────────────────────
 
 interface EditorContextValue {
   state: EditorState

@@ -1,6 +1,6 @@
 import type { FileStats } from '@/types'
-import { calcProgress } from '@/utils/progressCalc'
 import { cn } from '@/lib/utils'
+import { calcProgress } from '@/utils/progressCalc'
 
 interface Props {
   stats: FileStats
@@ -8,8 +8,8 @@ interface Props {
 
 export function FileProgress({ stats }: Props) {
   const pct = calcProgress(stats)
-  const color =
-    pct >= 80 ? 'bg-green-500' : pct >= 50 ? 'bg-yellow-500' : 'bg-red-500'
+  const color = stats.approved >= stats.total ? 'bg-blue-500' : pct >= 80 ? 'bg-green-500' : pct >= 50 ? 'bg-yellow-500' : 'bg-red-500'
+
 
   return (
     <div className="flex items-center gap-1.5" title={`${pct}% translated`}>

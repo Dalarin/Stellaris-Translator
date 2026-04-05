@@ -7,10 +7,11 @@ import type { TranslationEntry } from '@/types'
 import { cn } from '@/lib/utils'
 
 const STATUS_TABS = [
-  { key: 'all', label: 'All' },
-  { key: 'missing', label: 'Missing' },
-  { key: 'outdated', label: 'Outdated' },
+  { key: 'all',        label: 'All' },
+  { key: 'missing',    label: 'Missing' },
+  { key: 'outdated',   label: 'Outdated' },
   { key: 'translated', label: 'Done' },
+  { key: 'approved',   label: 'Approved' },
 ] as const
 
 export function EntryList() {
@@ -64,13 +65,14 @@ export function EntryList() {
   }, [state.activeEntry]) // eslint-disable-line
 
   const counts = useMemo(() => {
-    if (!state.activeFile) return { all: 0, missing: 0, outdated: 0, translated: 0 }
+    if (!state.activeFile) return { all: 0, missing: 0, outdated: 0, translated: 0, approved: 0 }
     const e = state.activeFile.entries
     return {
-      all: e.length,
-      missing: e.filter((x) => x.status === 'missing').length,
-      outdated: e.filter((x) => x.status === 'outdated').length,
+      all:        e.length,
+      missing:    e.filter((x) => x.status === 'missing').length,
+      outdated:   e.filter((x) => x.status === 'outdated').length,
       translated: e.filter((x) => x.status === 'translated').length,
+      approved:   e.filter((x) => x.status === 'approved').length,
     }
   }, [state.activeFile])
 

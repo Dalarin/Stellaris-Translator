@@ -51,7 +51,8 @@ export function ProgressDashboard() {
         </div>
         <ProgressBar value={totalPct} showLabel size="md" />
         <div className="mt-3 flex gap-4 text-xs">
-          <span className="text-green-400">✓ {totalStats.translated} translated</span>
+          <span className="text-blue-400">★ {totalStats.approved} approved</span>
+          <span className="text-green-400">✓ {totalStats.translated} done</span>
           <span className="text-yellow-400">⚠ {totalStats.outdated} outdated</span>
           <span className="text-red-400">✗ {totalStats.missing} missing</span>
         </div>
@@ -92,7 +93,7 @@ export function ProgressDashboard() {
                     {stats.missing}
                   </td>
                   <td className="px-3 py-2">
-                    <ProgressBar value={pct} showLabel size="sm" />
+                    <ProgressBar value={pct} outdatedValue={stats.outdated} showLabel size="sm" />
                   </td>
                 </tr>
               )

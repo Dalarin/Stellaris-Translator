@@ -17,8 +17,8 @@ export function ColorCodePreview({ text, className, placeholder }: Props) {
   }
 
   return (
-    <span className={cn('font-mono text-sm leading-relaxed', className)}>
-      {renderColorCodes(text)}
+    <span className={cn('font-mono text-sm leading-relaxed whitespace-pre-wrap', className)}>
+      {renderColorCodes(text.replace(/\\n/g, '\n'))}
     </span>
   )
 }

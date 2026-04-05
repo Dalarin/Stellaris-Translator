@@ -24,8 +24,13 @@ export function serializeToStellaris(
 
     const text = entry.translatedText || entry.originalText
     // Escape double quotes in the text
-    const escaped = text.replace(/"/g, '\\"')
-    lines.push(` ${entry.key}:${entry.index} "${escaped}"\n`)
+
+    const escaped = text.replace(/\n/g, '\\n');
+    const indexPart = (entry.index !== null && !isNaN(entry.index))
+      ? `:${entry.index}`
+      : '';
+
+    lines.push(` ${entry.key}${indexPart} "${escaped}"\n`);
   }
 
   return lines.join('')

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Plus, FolderOpen, Trash2, Clock } from 'lucide-react'
+import { Plus, FolderOpen, Trash2, Clock, SlidersHorizontal } from 'lucide-react'
 import { useProject } from '@/store/ProjectContext'
 import { getProjects, getFilesForProject, setLastProjectId, deleteProject } from '@/db/operations'
 import { NewProjectDialog } from './NewProjectDialog'
+import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 import { calcTotalStats, calcProgress } from '@/utils/progressCalc'
 import { ProgressBar } from '../shared/ProgressBar'
 import type { Project } from '@/types'
@@ -14,6 +15,7 @@ interface Props {
 export function ProjectDashboard({ onProjectOpen }: Props) {
   const { state, dispatch } = useProject()
   const [showNew, setShowNew] = useState(false)
+  const [settingsFor, setSettingsFor] = useState<Project | null>(null)
   const [stats, setStats] = useState<Record<string, { pct: number; total: number }>>({})
 
   useEffect(() => {
@@ -46,7 +48,16 @@ export function ProjectDashboard({ onProjectOpen }: Props) {
     if (!confirm('Delete this project and all its translations?')) return
     await deleteProject(projectId)
     dispatch({ type: 'REMOVE_PROJECT', payload: projectId })
-    setStats((s) => { const copy = { ...s }; delete copy[projectId]; return copy })
+    setStats((s) => {
+      const copy = { ...s }
+      delete copy[projectId]
+      return copy
+    })
+  }
+
+  function handleOpenSettings(e: React.MouseEvent, project: Project) {
+    e.stopPropagation()
+    setSettingsFor(project)
   }
 
   return (
@@ -92,24 +103,32 @@ export function ProjectDashboard({ onProjectOpen }: Props) {
                   className="group relative flex flex-col gap-3 rounded-lg border border-border bg-card p-4 text-left hover:border-primary/50 hover:bg-card/80 transition-colors"
                 >
                   <div className="flex items-start justify-between">
-                    <div>
-                      <div className="font-medium text-foreground">{project.name}</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium text-foreground truncate">{project.name}</div>
                       <div className="mt-0.5 flex items-center gap-1 text-[10px] text-muted-foreground">
                         <Clock size={10} />
                         {new Date(project.updatedAt).toLocaleDateString()}
                         {s && <span>· {s.total} strings</span>}
                       </div>
                     </div>
-                    <button
-                      onClick={(e) => handleDelete(e, project.id)}
-                      className="opacity-0 group-hover:opacity-100 rounded p-1 text-muted-foreground hover:text-destructive transition-all"
-                    >
-                      <Trash2 size={13} />
-                    </button>
+                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2">
+                      <button
+                        onClick={(e) => handleOpenSettings(e, project)}
+                        className="rounded p-1 text-muted-foreground hover:text-foreground transition-colors"
+                        title="Настройки проекта"
+                      >
+                        <SlidersHorizontal size={13} />
+                      </button>
+                      <button
+                        onClick={(e) => handleDelete(e, project.id)}
+                        className="rounded p-1 text-muted-foreground hover:text-destructive transition-colors"
+                        title="Удалить проект"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   </div>
-                  {s && (
-                    <ProgressBar value={s.pct} showLabel size="sm" />
-                  )}
+                  {s && <ProgressBar value={s.pct} showLabel size="sm" />}
                 </button>
               )
             })}
@@ -122,6 +141,14 @@ export function ProjectDashboard({ onProjectOpen }: Props) {
         onClose={() => setShowNew(false)}
         onCreated={onProjectOpen}
       />
+
+      {settingsFor && (
+        <ProjectSettingsDialog
+          projectId={settingsFor.id}
+          projectName={settingsFor.name}
+          onClose={() => setSettingsFor(null)}
+        />
+      )}
     </div>
   )
 }

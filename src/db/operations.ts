@@ -69,3 +69,57 @@ export async function getLastProjectId(): Promise<string | null> {
 export async function setLastProjectId(id: string): Promise<void> {
   await db.meta.put({ key: 'lastProjectId', value: id })
 }
+
+// --- Gemini settings ---
+
+export interface GeminiSettings {
+  apiKey: string
+  model: string
+  /** @deprecated use freeApiKeys */
+  freeApiKey?: string
+  freeApiKeys: string[]
+}
+
+export async function getGeminiSettings(): Promise<GeminiSettings | null> {
+  const record = await db.meta.get('geminiSettings')
+  if (!record) return null
+  try {
+    const raw = JSON.parse(record.value) as Omit<GeminiSettings, 'freeApiKeys'> & { freeApiKeys?: string[] }
+    // Migrate legacy single-key field
+    const freeApiKeys = raw.freeApiKeys?.length
+      ? raw.freeApiKeys
+      : raw.freeApiKey
+        ? [raw.freeApiKey]
+        : []
+    return { ...raw, freeApiKeys }
+  } catch {
+    return null
+  }
+}
+
+export async function setGeminiSettings(apiKey: string, model: string): Promise<void> {
+  const existing = await getGeminiSettings()
+  await db.meta.put({
+    key: 'geminiSettings',
+    value: JSON.stringify({ apiKey, model, freeApiKeys: existing?.freeApiKeys ?? [] }),
+  })
+}
+
+export async function setFreeApiKeys(freeApiKeys: string[]): Promise<void> {
+  const existing = await getGeminiSettings()
+  await db.meta.put({
+    key: 'geminiSettings',
+    value: JSON.stringify({ apiKey: existing?.apiKey ?? '', model: existing?.model ?? '', freeApiKeys }),
+  })
+}
+
+// --- Per-project Gemini system prompt ---
+
+export async function getProjectGeminiPrompt(projectId: string): Promise<string | null> {
+  const record = await db.meta.get(`geminiPrompt_${projectId}`)
+  return record?.value ?? null
+}
+
+export async function setProjectGeminiPrompt(projectId: string, prompt: string): Promise<void> {
+  await db.meta.put({ key: `geminiPrompt_${projectId}`, value: prompt })
+}

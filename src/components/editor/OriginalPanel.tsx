@@ -1,13 +1,10 @@
 import { useEditor } from '@/store/EditorContext'
 import { useGlossary } from '@/store/GlossaryContext'
 import { ColorCodePreview } from './ColorCodePreview'
-import { GlossaryHighlight } from '../glossary/GlossaryHighlight'
-import { VariableHighlight } from './VariableHighlight'
 import { StatusBadge } from '../shared/StatusBadge'
 
 export function OriginalPanel() {
   const { state } = useEditor()
-  const { state: glossaryState } = useGlossary()
   const entry = state.activeEntry
 
   if (!entry) {
@@ -42,7 +39,8 @@ export function OriginalPanel() {
             </div>
           )}
           <div className="font-mono text-xs text-muted-foreground">
-            {entry.key}:{entry.index}
+            {entry.key} 
+            {!Number.isNaN(entry.index) && `:${entry.index}`}
           </div>
         </div>
 
@@ -59,11 +57,7 @@ export function OriginalPanel() {
         <div className="rounded border border-border bg-background p-3">
           <div className="mb-1 text-[10px] text-muted-foreground uppercase tracking-wider">Raw text</div>
           <p className="font-mono text-sm leading-relaxed text-foreground whitespace-pre-wrap break-words">
-            <VariableHighlight text={entry.originalText}>
-              {(segment) => (
-                <GlossaryHighlight text={segment} entries={glossaryState.entries} />
-              )}
-            </VariableHighlight>
+            {entry.originalText}
           </p>
         </div>
 

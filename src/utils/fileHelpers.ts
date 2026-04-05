@@ -38,12 +38,10 @@ export function buildFileTree(files: TranslationFile[]): TreeNode[] {
       }
 
       if (!isLast && currentLevel[currentPath].type === 'folder') {
-        const nextLevel: Record<string, TreeNode> = {}
-        for (const child of currentLevel[currentPath].children || []) {
-          nextLevel[child.path] = child
+        if (!currentLevel[currentPath]._childMap) {
+          currentLevel[currentPath]._childMap = {}
         }
-        currentLevel[currentPath]._childMap = nextLevel
-        currentLevel = nextLevel
+        currentLevel = currentLevel[currentPath]._childMap!
       }
     }
   }
@@ -69,9 +67,10 @@ export function buildFileTree(files: TranslationFile[]): TreeNode[] {
 }
 
 function aggregateStats(nodes: TreeNode[]): FileStats {
-  const stats: FileStats = { translated: 0, outdated: 0, missing: 0, total: 0 }
+  const stats: FileStats = { approved: 0, translated: 0, outdated: 0, missing: 0, total: 0 }
   for (const node of nodes) {
     if (node.stats) {
+      stats.approved += node.stats.approved
       stats.translated += node.stats.translated
       stats.outdated += node.stats.outdated
       stats.missing += node.stats.missing
@@ -105,7 +104,7 @@ async function _collectFiles(
   prefix: string
 ): Promise<Map<string, File>> {
   const result = new Map<string, File>()
-  for await (const [name, handle] of dirHandle.entries()) {
+  for await (const [name, handle] of (dirHandle as unknown as AsyncIterable<[string, FileSystemHandle]>)) {
     const fullPath = prefix ? `${prefix}/${name}` : name
     if (handle.kind === 'file') {
       if (name.endsWith('.yml') || name.endsWith('.yaml')) {

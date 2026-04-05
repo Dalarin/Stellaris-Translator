@@ -10,6 +10,7 @@ interface Props {
 }
 
 const STATUS_INDICATOR = {
+  approved: 'bg-blue-400',
   translated: 'bg-green-500',
   outdated: 'bg-yellow-500',
   missing: 'bg-red-500',

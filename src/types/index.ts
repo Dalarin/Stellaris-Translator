@@ -1,10 +1,14 @@
+export type EntryStatus = 'translated' | 'approved' | 'outdated' | 'missing'
+
+export type StatusFilter = 'all' | EntryStatus
+
 export interface TranslationEntry {
   key: string
   index: number | null
   originalText: string
   translatedText: string
   category: string | null
-  status: 'translated' | 'outdated' | 'missing'
+  status: EntryStatus
 }
 
 export interface TranslationFile {
@@ -39,6 +43,7 @@ export interface TreeNode {
 }
 
 export interface FileStats {
+  approved: number
   translated: number
   outdated: number
   missing: number

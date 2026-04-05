@@ -1,7 +1,7 @@
-import type { TranslationFile, TranslationEntry, FileStats } from '@/types'
+import type { TranslationFile, TranslationEntry, FileStats, StatusFilter } from '@/types'
 
 export function calcFileStats(file: TranslationFile): FileStats {
-  const stats: FileStats = { translated: 0, outdated: 0, missing: 0, total: 0 }
+  const stats: FileStats = { approved: 0, translated: 0, outdated: 0, missing: 0, total: 0 }
   for (const entry of file.entries) {
     stats.total++
     stats[entry.status]++
@@ -10,9 +10,10 @@ export function calcFileStats(file: TranslationFile): FileStats {
 }
 
 export function calcTotalStats(files: TranslationFile[]): FileStats {
-  const stats: FileStats = { translated: 0, outdated: 0, missing: 0, total: 0 }
+  const stats: FileStats = { approved: 0, translated: 0, outdated: 0, missing: 0, total: 0 }
   for (const file of files) {
     const s = calcFileStats(file)
+    stats.approved += s.approved
     stats.translated += s.translated
     stats.outdated += s.outdated
     stats.missing += s.missing
@@ -23,7 +24,7 @@ export function calcTotalStats(files: TranslationFile[]): FileStats {
 
 export function calcProgress(stats: FileStats): number {
   if (stats.total === 0) return 0
-  return Math.round((stats.translated / stats.total) * 100)
+  return Math.round(((stats.translated + stats.approved) / stats.total) * 100)
 }
 
 export function getStatusColor(stats: FileStats): string {
@@ -33,10 +34,7 @@ export function getStatusColor(stats: FileStats): string {
   return 'text-red-400'
 }
 
-export function filterEntries(
-  entries: TranslationEntry[],
-  filter: 'all' | 'translated' | 'outdated' | 'missing'
-): TranslationEntry[] {
+export function filterEntries(entries: TranslationEntry[], filter: StatusFilter): TranslationEntry[] {
   if (filter === 'all') return entries
   return entries.filter((e) => e.status === filter)
 }
