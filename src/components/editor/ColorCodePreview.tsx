@@ -19,12 +19,14 @@ function resolveVariables(text: string, entries: TranslationEntry[]): React.Reac
     const match = part.match(/^\$([^$\s]+)\$$/)
     if (!match) return part
 
-    const key = match[1]
+    const key = match[1] + ':'
     const entry = entries.find((e) => e.key === key)
+
     if (!entry) return part
 
     const resolved = entry.translatedText || entry.originalText
-    // Render the resolved value with color codes, wrapped in a subtle highlight
+
+
     return (
       <span key={i} className="rounded bg-muted/50 px-0.5 text-muted-foreground/80" title={`$${key}$`}>
         {renderColorCodes(resolved.replace(/\\n/g, '\n'))}

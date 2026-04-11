@@ -11,7 +11,8 @@
 - **Автоперевод через Gemini AI**
   - Платный API (любая модель, потоковый режим)
   - Бесплатный API (`gemini-2.5-flash`) с пулом ключей и авто-ротацией при 429
-- **Глоссарий** — термины, которые автоматически подсвечиваются в тексте
+- **Глоссарий** — термины подсвечиваются в тексте и автоматически передаются в системный промпт при AI-переводе
+- **Автоматическое сопоставление** — заполнение пропущенных переводов из других файлов проекта по ключу
 - **Экспорт** — восстановление оригинальной структуры файла с переведёнными строками
 - **Прогресс по файлам** — статистика translated / approved / missing
 
@@ -64,6 +65,7 @@ src/
 ├── hooks/
 │   ├── useImport.ts        # Парсинг и импорт файлов
 │   ├── useExport.ts        # Сборка и экспорт
+│   ├── useAutoMatch.ts     # Автосопоставление переводов из других файлов проекта
 │   └── useSearch.ts        # Глобальный поиск по записям
 ├── parser/
 │   ├── stellarisParser.ts  # Парсинг .yml → TranslationEntry[]
@@ -84,7 +86,8 @@ src/
 └── utils/
     ├── fileHelpers.ts
     ├── idHelpers.ts
-    └── progressCalc.ts
+    ├── progressCalc.ts
+    └── translationMatcher.ts  # buildEntryMap / matchEntry для автосопоставления
 ```
 
 ---
@@ -157,6 +160,11 @@ TranslationPanel
             ├── ApiKeyPool           ← ротация ключей при 429
             ├── GeminiRateLimiter    ← handle429() → retry | abort
             └── callWithNetworkRetry ← backoff 1s/2s/4s на сетевые ошибки
+
+Перед вызовом обоих сервисов системный промпт дополняется записями глоссария:
+
+    buildPromptWithGlossary(basePrompt, glossaryEntries)
+        → "...базовый промпт...\n\nГлоссарий:\n  Empire → Империя\n  ..."
 ```
 
 ### GeminiError

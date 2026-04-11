@@ -1,8 +1,10 @@
-import { useRef, useState } from 'react'
-import { FolderOpen, Upload, X, CheckCircle, AlertCircle } from 'lucide-react'
+import { useRef, useState, useEffect } from 'react'
+import { FolderOpen, Upload, X, CheckCircle } from 'lucide-react'
 import { useImport } from '@/hooks/useImport'
 import { useProject } from '@/store/ProjectContext'
+import { getProjects, getFilesForProject } from '@/db/operations'
 import { cn } from '@/lib/utils'
+import type { Project, TranslationFile } from '@/types'
 
 interface Props {
   open: boolean
@@ -26,10 +28,33 @@ export function ImportWizard({ open, onClose, onDone }: Props) {
   const [enSelected, setEnSelected] = useState<string | null>(null)
   const [ruSelected, setRuSelected] = useState<string | null>(null)
 
+  const [otherProjects, setOtherProjects] = useState<Project[]>([])
+  const [referenceProjectId, setReferenceProjectId] = useState<string>('')
+  const [referenceFiles, setReferenceFiles] = useState<TranslationFile[]>([])
+
+  useEffect(() => {
+    if (!open) return
+    getProjects().then((projects) => {
+      setOtherProjects(projects.filter((p) => p.id !== projectId))
+    })
+  }, [open, projectId])
+
+  async function handleReferenceProjectChange(id: string) {
+    setReferenceProjectId(id)
+    if (id) {
+      const files = await getFilesForProject(id)
+      setReferenceFiles(files)
+    } else {
+      setReferenceFiles([])
+    }
+  }
+
   function handleClose() {
     setStep('select')
     setEnSelected(null)
     setRuSelected(null)
+    setReferenceProjectId('')
+    setReferenceFiles([])
     reset()
     onClose()
   }
@@ -42,7 +67,8 @@ export function ImportWizard({ open, onClose, onDone }: Props) {
       const files = await importFromFileLists(
         enInputRef.current.files,
         hasRu && ruInputRef.current?.files?.length ? ruInputRef.current.files : null,
-        state.files
+        state.files,
+        referenceFiles.length > 0 ? referenceFiles : undefined
       )
 
       dispatch({ type: 'SET_FILES', payload: files })
@@ -69,7 +95,12 @@ export function ImportWizard({ open, onClose, onDone }: Props) {
       }
 
       setStep('importing')
-      const files = await importFromDirectories(enDir, ruDir, state.files)
+      const files = await importFromDirectories(
+        enDir,
+        ruDir,
+        state.files,
+        referenceFiles.length > 0 ? referenceFiles : undefined
+      )
       dispatch({ type: 'SET_FILES', payload: files })
       setStep('done')
     } catch (err: any) {
@@ -179,6 +210,29 @@ export function ImportWizard({ open, onClose, onDone }: Props) {
                         {ruSelected ?? 'Select RU folder (optional)...'}
                       </button>
                     </div>
+                  </div>
+                )}
+
+                {otherProjects.length > 0 && (
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                      Взять переводы из другого проекта (опционально)
+                    </label>
+                    <select
+                      value={referenceProjectId}
+                      onChange={(e) => handleReferenceProjectChange(e.target.value)}
+                      className="w-full rounded border border-input bg-background px-3 py-2 text-sm text-foreground"
+                    >
+                      <option value="">— не выбрано —</option>
+                      {otherProjects.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                    {referenceProjectId && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Переводы будут подставлены по ключу, только если EN-текст совпадает.
+                      </p>
+                    )}
                   </div>
                 )}
 

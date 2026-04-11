@@ -1,6 +1,8 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { useEditor } from '@/store/EditorContext'
 import { useProject } from '@/store/ProjectContext'
+import { useAutoMatch } from '@/hooks/useAutoMatch'
+import { useGlossary } from '@/store/GlossaryContext'
 import { upsertTranslationFile, getGeminiSettings, getProjectGeminiPrompt } from '@/db/operations'
 import { DEFAULT_SYSTEM_PROMPT } from '@/services/geminiService'
 import { ColorCodePreview } from './ColorCodePreview'
@@ -13,35 +15,44 @@ import { autoTranslateFile, GeminiError, type TranslateProgress } from '@/servic
 import { autoTranslateFree, type FreeTranslateProgress, type FreeTranslateResult } from '@/services/freeGeminiService'
 import { filterEntries } from '@/utils/progressCalc'
 import { cn } from '@/lib/utils'
+import { Wand2, Loader2 } from 'lucide-react'
 import type { EntryStatus } from '@/types'
 
 const AUTOSAVE_DELAY = 800
 
 const statusBorderClass: Record<EntryStatus, string> = {
   translated: 'border-green-500/40',
-  approved:   'border-blue-400/40',
-  outdated:   'border-yellow-500/40',
-  missing:    'border-input',
+  approved: 'border-blue-400/40',
+  outdated: 'border-yellow-500/40',
+  missing: 'border-input',
+}
+
+function buildPromptWithGlossary(basePrompt: string, glossaryEntries: { sourceTerm: string; targetTerm: string }[]): string {
+  if (glossaryEntries.length === 0) return basePrompt
+  const lines = glossaryEntries.map((e) => `  ${e.sourceTerm} → ${e.targetTerm}`).join('\n')
+  return `${basePrompt}\n\nГлоссарий (обязательно использовать при переводе этих терминов):\n${lines}`
 }
 
 export function TranslationPanel() {
   const { state, dispatch } = useEditor()
-  const { dispatch: projectDispatch } = useProject()
+  const { state: projectState, dispatch: projectDispatch } = useProject()
+  const { isMatching, matchFile } = useAutoMatch()
+  const { state: glossaryState } = useGlossary()
   const entry = state.activeEntry
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const abortRef     = useRef<AbortController | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
   const freeAbortRef = useRef<AbortController | null>(null)
 
   const [geminiSettingsOpen, setGeminiSettingsOpen] = useState(false)
 
   const [translateProgress, setTranslateProgress] = useState<TranslateProgress | null>(null)
-  const [translateError,    setTranslateError]    = useState<string | null>(null)
-  const [translateDone,     setTranslateDone]     = useState<{ total: number } | null>(null)
+  const [translateError, setTranslateError] = useState<string | null>(null)
+  const [translateDone, setTranslateDone] = useState<{ total: number } | null>(null)
 
   const [freeProgress, setFreeProgress] = useState<FreeTranslateProgress | null>(null)
-  const [freeError,    setFreeError]    = useState<string | null>(null)
-  const [freeDone,     setFreeDone]     = useState<FreeTranslateResult | null>(null)
+  const [freeError, setFreeError] = useState<string | null>(null)
+  const [freeDone, setFreeDone] = useState<FreeTranslateResult | null>(null)
 
   // ─── Auto-save ──────────────────────────────────────────────────────────────
 
@@ -121,7 +132,7 @@ export function TranslationPanel() {
         state.activeFile.entries,
         settings.apiKey,
         settings.model,
-        savedPrompt ?? DEFAULT_SYSTEM_PROMPT,
+        buildPromptWithGlossary(savedPrompt ?? DEFAULT_SYSTEM_PROMPT, glossaryState.entries),
         state.activeFile.relativePath,
         (p) => setTranslateProgress(p),
         applyChunkUpdates,
@@ -153,7 +164,7 @@ export function TranslationPanel() {
       const result = await autoTranslateFree(
         state.activeFile.entries,
         freeApiKeys,
-        savedPrompt ?? DEFAULT_SYSTEM_PROMPT,
+        buildPromptWithGlossary(savedPrompt ?? DEFAULT_SYSTEM_PROMPT, glossaryState.entries),
         state.activeFile.relativePath,
         (p) => setFreeProgress(p),
         applyChunkUpdates,
@@ -167,6 +178,15 @@ export function TranslationPanel() {
       freeAbortRef.current = null
     }
   }, [state.activeFile, applyChunkUpdates])
+
+  // ─── Auto-match ─────────────────────────────────────────────────────────────
+
+  const handleAutoMatch = useCallback(async () => {
+    if (!state.activeFile) return
+    const updated = await matchFile(state.activeFile, projectState.files)
+    projectDispatch({ type: 'UPDATE_FILE', payload: updated })
+    dispatch({ type: 'SET_ACTIVE_FILE', payload: updated })
+  }, [state.activeFile, projectState.files, matchFile, projectDispatch, dispatch])
 
   // ─── Keyboard shortcuts ──────────────────────────────────────────────────────
 
@@ -186,7 +206,7 @@ export function TranslationPanel() {
 
   // ─── Shared overlays & dialogs ───────────────────────────────────────────────
 
-  const isTranslating     = translateProgress !== null
+  const isTranslating = translateProgress !== null
   const isFreeTranslating = freeProgress !== null
 
   const dialogs = (
@@ -209,6 +229,17 @@ export function TranslationPanel() {
     </>
   )
 
+  const autoMatchButton = state.activeFile ? (
+    <button
+      onClick={handleAutoMatch}
+      disabled={isMatching}
+      title="Авто-матч: заполнить переводы из других файлов проекта"
+      className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+    >
+      {isMatching ? <Loader2 size={13} className="animate-spin" /> : <Wand2 size={13} />}
+    </button>
+  ) : null
+
   const aiActions = state.activeFile ? (
     <AIActions
       isTranslating={isTranslating}
@@ -230,7 +261,10 @@ export function TranslationPanel() {
           <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Translation (RU)
           </span>
-          {aiActions}
+          <div className="flex items-center gap-2">
+            {autoMatchButton}
+            {aiActions}
+          </div>
         </div>
         <div className="flex flex-1 items-center justify-center">
           <p className="text-sm text-muted-foreground">Select an entry from the list</p>
@@ -252,6 +286,7 @@ export function TranslationPanel() {
           {state.dirty && <span className="text-[10px] text-muted-foreground animate-pulse">Saving...</span>}
         </div>
         <div className="flex items-center gap-2">
+          {autoMatchButton}
           {aiActions}
           <div className="w-px h-3 bg-border" />
           <EntryActions

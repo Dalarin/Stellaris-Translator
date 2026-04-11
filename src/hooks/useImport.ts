@@ -3,6 +3,7 @@ import { parseFile } from '@/parser/stellarisParser'
 import { generateId } from '@/utils/idHelpers'
 import { upsertTranslationFiles } from '@/db/operations'
 import { collectFilesFromInput } from '@/utils/fileHelpers'
+import { buildEntryMap, matchEntry } from '@/utils/translationMatcher'
 import type { TranslationFile, TranslationEntry } from '@/types'
 
 export interface ImportProgress {
@@ -24,7 +25,8 @@ export function useImport(projectId: string) {
     async (
       enFiles: Map<string, File>,
       ruFiles: Map<string, File> | null,
-      existingFiles: TranslationFile[]
+      existingFiles: TranslationFile[],
+      referenceFiles?: TranslationFile[]
     ): Promise<TranslationFile[]> => {
       const allEnPaths = Array.from(enFiles.keys())
       const total = allEnPaths.length
@@ -32,6 +34,9 @@ export function useImport(projectId: string) {
       setProgress({ phase: 'parsing', current: 0, total, message: 'Parsing EN files...' })
 
       const result: TranslationFile[] = []
+
+      // Build reference map for cross-project matching (Priority 1.5)
+      const referenceMap = buildEntryMap(referenceFiles ?? [])
 
       // Build lookup of existing files by relativePath to preserve existing translations
       const existingByPath = new Map<string, TranslationFile>()
@@ -102,6 +107,12 @@ export function useImport(projectId: string) {
             }
           }
 
+          // Priority 1.5: match from reference project (by key + EN text comparison)
+          if (referenceMap.size > 0) {
+            const matched = matchEntry(enEntry, referenceMap)
+            if (matched.status !== 'missing') return matched
+          }
+
           // Priority 2: match from RU file
           const ruEntry = ruEntryMap.get(enEntry.key)
           if (ruEntry) {
@@ -148,11 +159,12 @@ export function useImport(projectId: string) {
     async (
       enFileList: FileList,
       ruFileList: FileList | null,
-      existingFiles: TranslationFile[]
+      existingFiles: TranslationFile[],
+      referenceFiles?: TranslationFile[]
     ): Promise<TranslationFile[]> => {
       const enFiles = collectFilesFromInput(enFileList)
       const ruFiles = ruFileList ? collectFilesFromInput(ruFileList) : null
-      return importFiles(enFiles, ruFiles, existingFiles)
+      return importFiles(enFiles, ruFiles, existingFiles, referenceFiles)
     },
     [importFiles]
   )
@@ -161,12 +173,13 @@ export function useImport(projectId: string) {
     async (
       enDir: FileSystemDirectoryHandle,
       ruDir: FileSystemDirectoryHandle | null,
-      existingFiles: TranslationFile[]
+      existingFiles: TranslationFile[],
+      referenceFiles?: TranslationFile[]
     ): Promise<TranslationFile[]> => {
       const { collectAllFiles } = await import('@/utils/fileHelpers')
       const enFiles = await collectAllFiles(enDir)
       const ruFiles = ruDir ? await collectAllFiles(ruDir) : null
-      return importFiles(enFiles, ruFiles, existingFiles)
+      return importFiles(enFiles, ruFiles, existingFiles, referenceFiles)
     },
     [importFiles]
   )
