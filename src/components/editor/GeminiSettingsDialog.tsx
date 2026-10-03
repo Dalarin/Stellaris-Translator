@@ -20,7 +20,7 @@ const STATUS_DOT: Record<FreeKeyStatus, { color: string; label: string }> = {
 
 export function GeminiSettingsDialog({ onClose }: GeminiSettingsDialogProps) {
   const [apiKey, setApiKey]   = useState('')
-  const [model,  setModel]    = useState('gemini-3-flash-preview')
+  const [model,  setModel]    = useState('gemini-3.8-flash')
   const [saved,  setSaved]    = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -127,7 +127,7 @@ export function GeminiSettingsDialog({ onClose }: GeminiSettingsDialogProps) {
                     className="w-full rounded border border-input bg-background px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-ring"
                   />
                   <p className="text-[11px] text-muted-foreground">
-                    Например: gemini-3-flash-preview · gemini-2.0-flash · gemini-2.5-flash-preview-04-17
+                    Например: gemini-3.8-flash · gemini-3-flash-preview · gemini-2.0-flash · gemini-2.5-flash-preview-04-17
                   </p>
                 </div>
               </div>
