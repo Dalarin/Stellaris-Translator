@@ -6,7 +6,11 @@ import { GlossaryPanel } from '../glossary/GlossaryPanel'
 import { useGlossary } from '@/store/GlossaryContext'
 import { ProgressBar } from '../shared/ProgressBar'
 import { calcFileStats, calcProgress } from '@/utils/progressCalc'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
+import { QaPanel } from './QaPanel'
+import { checkEntries } from '@/utils/qaChecks'
+import { AlertTriangle } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 export function EditorPane() {
   const { state } = useEditor()
@@ -17,6 +21,12 @@ export function EditorPane() {
     [state.activeFile]
   )
   const pct = stats ? calcProgress(stats) : 0
+
+  const [qaOpen, setQaOpen] = useState(false)
+  const qaIssues = useMemo(
+    () => (state.activeFile && qaOpen ? checkEntries(state.activeFile.entries, glossaryState.entries) : []),
+    [state.activeFile, glossaryState.entries, qaOpen],
+  )
 
   if (!state.activeFile) {
     return (
@@ -39,11 +49,23 @@ export function EditorPane() {
           <span className="text-sm font-medium text-foreground truncate">
             {state.activeFile.relativePath.split('/').pop()}
           </span>
-          {stats && (
-            <span className="text-xs text-muted-foreground shrink-0 ml-2">
-              {stats.translated}/{stats.total} ({pct}%)
-            </span>
-          )}
+          <div className="ml-2 flex shrink-0 items-center gap-3">
+            <button
+              onClick={() => setQaOpen((v) => !v)}
+              className={cn(
+                'flex items-center gap-1 rounded px-1.5 py-0.5 text-xs transition-colors',
+                qaOpen ? 'bg-yellow-500/20 text-yellow-400' : 'text-muted-foreground hover:text-foreground',
+              )}
+              title="Проверка качества: переменные, английский, длина, глоссарий"
+            >
+              <AlertTriangle size={12} /> QA{qaOpen ? ` (${qaIssues.length})` : ''}
+            </button>
+            {stats && (
+              <span className="text-xs text-muted-foreground">
+                {stats.translated}/{stats.total} ({pct}%)
+              </span>
+            )}
+          </div>
         </div>
         {stats && <ProgressBar value={pct} />}
       </div>
@@ -62,6 +84,8 @@ export function EditorPane() {
             <TranslationPanel />
           </div>
         </div>
+
+        {qaOpen && <QaPanel issues={qaIssues} onClose={() => setQaOpen(false)} />}
 
         {/* Glossary panel */}
         {glossaryState.isOpen && <GlossaryPanel />}

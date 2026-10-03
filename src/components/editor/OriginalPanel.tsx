@@ -2,10 +2,19 @@ import { useEditor } from '@/store/EditorContext'
 import { useGlossary } from '@/store/GlossaryContext'
 import { ColorCodePreview } from './ColorCodePreview'
 import { StatusBadge } from '../shared/StatusBadge'
+import { diffWords } from '@/utils/textDiff'
+import { useMemo } from 'react'
 
 export function OriginalPanel() {
   const { state } = useEditor()
   const entry = state.activeEntry
+  const diff = useMemo(
+    () =>
+      entry?.status === 'outdated' && entry.previousOriginalText
+        ? diffWords(entry.previousOriginalText, entry.originalText)
+        : null,
+    [entry?.status, entry?.previousOriginalText, entry?.originalText],
+  )
 
   if (!entry) {
     return (
@@ -40,7 +49,7 @@ export function OriginalPanel() {
           )}
           <div className="font-mono text-xs text-muted-foreground">
             {entry.key} 
-            {!Number.isNaN(entry.index) && `:${entry.index}`}
+            {!Number.isNaN(entry.index) && entry.index != null && `:${entry.index}`}
           </div>
         </div>
 
@@ -60,6 +69,31 @@ export function OriginalPanel() {
             {entry.originalText}
           </p>
         </div>
+
+        {/* Outdated: what changed in the English text */}
+        {diff && (
+          <div className="rounded border border-yellow-500/30 bg-yellow-500/5 p-3">
+            <div className="mb-1 flex items-center gap-2 text-[10px] font-semibold text-yellow-400 uppercase tracking-wider">
+              Что изменилось в оригинале
+              {entry.minorChange && (
+                <span className="rounded bg-yellow-500/20 px-1.5 py-0.5 normal-case tracking-normal">
+                  мелкая правка
+                </span>
+              )}
+            </div>
+            <p className="font-mono text-sm leading-relaxed whitespace-pre-wrap break-words text-foreground/80">
+              {diff.map((part, i) =>
+                part.type === 'same' ? (
+                  <span key={i}>{part.text}</span>
+                ) : part.type === 'del' ? (
+                  <del key={i} className="rounded bg-red-500/20 text-red-300 no-underline line-through">{part.text}</del>
+                ) : (
+                  <ins key={i} className="rounded bg-green-500/20 text-green-300 no-underline">{part.text}</ins>
+                ),
+              )}
+            </p>
+          </div>
+        )}
 
         {/* Outdated: show what changed */}
         {entry.status === 'outdated' && entry.translatedText && (
