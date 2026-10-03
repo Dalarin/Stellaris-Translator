@@ -34,6 +34,8 @@ interface RunResult {
   cancelled: boolean
 }
 
+const ROW_GRID = 'grid grid-cols-[1.5rem_minmax(0,1fr)_6rem_5rem] items-center gap-2 px-2 py-1.5'
+
 const fmt = (n: number): string => n.toLocaleString('ru-RU')
 
 export function BulkTranslateDialog({ open, onClose }: Props) {
@@ -234,37 +236,31 @@ export function BulkTranslateDialog({ open, onClose }: Props) {
                       <button className="text-muted-foreground hover:underline" onClick={() => setSelected(new Set())}>снять все</button>
                     </span>
                   </div>
-                  <div className="overflow-hidden rounded border border-border">
-                    <table className="w-full text-xs">
-                      <thead className="bg-card text-muted-foreground">
-                        <tr>
-                          <th className="w-8 px-2 py-1.5" />
-                          <th className="px-2 py-1.5 text-left font-medium">Файл</th>
-                          <th className="px-2 py-1.5 text-right font-medium">Строк</th>
-                          <th className="px-2 py-1.5 text-right font-medium">Запросов</th>
-                        </tr>
-                      </thead>
-                      <tbody className="block max-h-56 overflow-y-auto">
-                        {withWork.map((f: TranslationFile) => {
-                          const e = estimates.get(f.id)!
-                          return (
-                            <tr key={f.id} className="table w-full table-fixed border-t border-border/50 hover:bg-accent/5">
-                              <td className="w-8 px-2 py-1">
-                                <input type="checkbox" checked={selected.has(f.id)} onChange={() => toggle(f.id)} />
-                              </td>
-                              <td className="truncate px-2 py-1 font-mono text-[11px] text-foreground" title={f.relativePath}>
-                                {f.relativePath.split('/').pop()}
-                              </td>
-                              <td className="w-16 px-2 py-1 text-right text-muted-foreground">
-                                {fmt(e.entriesToTranslate)}
-                                {e.entriesFree > 0 && <span className="ml-1 opacity-60" title="Подставятся без запроса">+{fmt(e.entriesFree)}</span>}
-                              </td>
-                              <td className="w-20 px-2 py-1 text-right text-muted-foreground">{fmt(e.requests)}</td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
+                  <div className="overflow-hidden rounded border border-border text-xs">
+                    <div className={cn(ROW_GRID, 'bg-card font-medium text-muted-foreground')}>
+                      <span />
+                      <span>Файл</span>
+                      <span className="text-right">Строк</span>
+                      <span className="text-right">Запросов</span>
+                    </div>
+                    <div className="max-h-56 overflow-y-auto">
+                      {withWork.map((f: TranslationFile) => {
+                        const e = estimates.get(f.id)!
+                        return (
+                          <label key={f.id} className={cn(ROW_GRID, 'cursor-pointer border-t border-border/50 hover:bg-accent/5')}>
+                            <input type="checkbox" checked={selected.has(f.id)} onChange={() => toggle(f.id)} />
+                            <span className="truncate font-mono text-[11px] text-foreground" title={f.relativePath}>
+                              {f.relativePath.split('/').pop()}
+                            </span>
+                            <span className="text-right text-muted-foreground">
+                              {fmt(e.entriesToTranslate)}
+                              {e.entriesFree > 0 && <span className="ml-1 opacity-60" title="Подставятся без запроса">+{fmt(e.entriesFree)}</span>}
+                            </span>
+                            <span className="text-right text-muted-foreground">{fmt(e.requests)}</span>
+                          </label>
+                        )
+                      })}
+                    </div>
                   </div>
 
                   <div className="space-y-1 rounded border border-border bg-card p-3 text-xs">
