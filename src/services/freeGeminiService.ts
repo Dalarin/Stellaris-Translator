@@ -2,7 +2,15 @@ import { GoogleGenAI } from '@google/genai'
 import { GeminiRateLimiter, DailyLimitExhaustedError, UnexpectedRateLimitError, FREE_MODEL } from '@/providers/GeminiRateLimiter'
 import { ApiKeyPool } from '@/providers/ApiKeyPool'
 import { GeminiError } from '@/services/geminiService'
-import { buildChunks, formatChunk, parseResponse } from '@/services/geminiService'
+import {
+  formatChunk,
+  parseResponse,
+  parseGlossarySuggestions,
+  buildChunkPrompt,
+  prepareRun,
+  type TranslateOptions,
+} from '@/services/geminiService'
+import { splitValid } from '@/services/translationPrep'
 import type { TranslationEntry } from '@/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -16,6 +24,8 @@ export type FreeTranslateProgress =
 export interface FreeTranslateResult {
   total: number
   isComplete: boolean
+  /** Keys the model skipped or whose game tokens ($VAR$, §Y, [..]) came back broken */
+  failedKeys: string[]
   processedChunks: number
   totalChunks: number
 }
@@ -90,17 +100,22 @@ export async function autoTranslateFree(
   onProgress: (p: FreeTranslateProgress) => void,
   onChunkDone: (updates: Map<string, string>) => void,
   signal?: AbortSignal,
+  options: TranslateOptions = {},
 ): Promise<FreeTranslateResult> {
   const pool = new ApiKeyPool(freeApiKeys)
   const limiter = new GeminiRateLimiter()
-  const chunks = buildChunks(entries)
+  const { instant, chunks, expand } = prepareRun(entries, options)
+  const failedKeys: string[] = []
+  let translatedCount = 0
 
-  if (chunks.length === 0) {
-    return { total: 0, isComplete: true, processedChunks: 0, totalChunks: 0 }
+  if (instant.size > 0) {
+    translatedCount += instant.size
+    onChunkDone(instant)
   }
 
-  const knownKeys = new Set(entries.map((e) => e.key))
-  let translatedCount = 0
+  if (chunks.length === 0) {
+    return { total: translatedCount, isComplete: true, processedChunks: 0, totalChunks: 0, failedKeys }
+  }
 
   for (let i = 0; i < chunks.length; i++) {
     if (signal?.aborted) break
@@ -108,6 +123,7 @@ export async function autoTranslateFree(
     onProgress({ type: 'translating', current: i + 1, total: chunks.length, translatedCount })
 
     const yml = formatChunk(chunks[i])
+    const fullPrompt = buildChunkPrompt(systemPrompt, options.glossary, chunks[i])
 
     // Per-chunk rate-limit state
     const triedInRound = new Set<number>()  // keys tried with RPM error this round
@@ -126,7 +142,7 @@ export async function autoTranslateFree(
             model: FREE_MODEL,
             config: {
               temperature: 0.4,
-              systemInstruction: [{ text: systemPrompt }],
+              systemInstruction: [{ text: fullPrompt }],
             },
             contents: [{ role: 'user', parts: [{ text: `Файл: ${fileName}\n\n${yml}` }] }],
           })
@@ -148,7 +164,7 @@ export async function autoTranslateFree(
           onProgress({ type: 'switching_key', reason: 'exhausted', current: i + 1, total: chunks.length, keyIndex: pool.currentIndex, totalKeys: pool.totalCount })
           const hasMore = pool.exhaustCurrent()
           if (!hasMore) {
-            return { total: translatedCount, isComplete: false, processedChunks: i, totalChunks: chunks.length }
+            return { total: translatedCount, isComplete: false, processedChunks: i, totalChunks: chunks.length, failedKeys }
           }
           // New key available; clear RPM tracking since it's a fresh key
           triedInRound.delete(pool.currentIndex)
@@ -181,13 +197,19 @@ export async function autoTranslateFree(
       }
     }
 
-    const updates = parseResponse(text, knownKeys)
+    const chunkEntries = chunks[i].entries
+    const got = parseResponse(text, new Set(chunkEntries.map((e) => e.key)))
+    const { valid } = splitValid(chunkEntries, got)
+    for (const e of chunkEntries) if (!valid.has(e.key)) failedKeys.push(e.key)
+    const updates = expand(valid)
+    const suggestions = parseGlossarySuggestions(text)
+    if (suggestions.length > 0) options.onGlossarySuggestions?.(suggestions)
     translatedCount += updates.size
     onChunkDone(updates)
   }
 
   const isComplete = !signal?.aborted
-  return { total: translatedCount, isComplete, processedChunks: chunks.length, totalChunks: chunks.length }
+  return { total: translatedCount, isComplete, processedChunks: chunks.length, totalChunks: chunks.length, failedKeys }
 }
 
 export { DailyLimitExhaustedError, UnexpectedRateLimitError }

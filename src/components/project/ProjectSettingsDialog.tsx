@@ -1,8 +1,17 @@
 import { useState, useEffect } from 'react'
 import { X, Save, CheckCheck, RotateCcw, SlidersHorizontal } from 'lucide-react'
-import { getProjectGeminiPrompt, setProjectGeminiPrompt } from '@/db/operations'
-import { DEFAULT_SYSTEM_PROMPT } from '@/services/geminiService'
+import {
+  getProjectGeminiPrompt,
+  setProjectGeminiPrompt,
+  getProjectTranslateSettings,
+  setProjectTranslateSettings,
+} from '@/db/operations'
+import { DEFAULT_SYSTEM_PROMPT, DEFAULT_TRANSLATE_SETTINGS } from '@/services/geminiService'
+import type { TranslateSettings, ThinkingSetting } from '@/types'
 import { cn } from '@/lib/utils'
+
+const fieldClass =
+  'w-full rounded border border-input bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring'
 
 interface ProjectSettingsDialogProps {
   projectId: string
@@ -16,18 +25,27 @@ export function ProjectSettingsDialog({
   onClose,
 }: ProjectSettingsDialogProps) {
   const [systemPrompt, setSystemPrompt] = useState('')
+  const [tSettings, setTSettings] = useState<TranslateSettings>(DEFAULT_TRANSLATE_SETTINGS)
   const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    getProjectGeminiPrompt(projectId).then((prompt) => {
-      setSystemPrompt(prompt ?? DEFAULT_SYSTEM_PROMPT)
-      setLoading(false)
-    })
+    Promise.all([getProjectGeminiPrompt(projectId), getProjectTranslateSettings(projectId)]).then(
+      ([prompt, translateSettings]) => {
+        setSystemPrompt(prompt ?? DEFAULT_SYSTEM_PROMPT)
+        setTSettings(translateSettings)
+        setLoading(false)
+      },
+    )
   }, [projectId])
 
   async function handleSave() {
     await setProjectGeminiPrompt(projectId, systemPrompt)
+    await setProjectTranslateSettings(projectId, {
+      ...tSettings,
+      chunkChars: Math.min(60000, Math.max(2000, tSettings.chunkChars || DEFAULT_TRANSLATE_SETTINGS.chunkChars)),
+      concurrency: Math.min(8, Math.max(1, tSettings.concurrency || 1)),
+    })
     setSaved(true)
     setTimeout(() => {
       setSaved(false)
@@ -82,7 +100,64 @@ export function ProjectSettingsDialog({
               />
               <p className="text-[11px] text-muted-foreground">
                 Задаёт тон, глоссарий и стиль перевода. Используется при нажатии «Auto» в редакторе.
+                Контекст соседних строк, старые переводы обновлённых строк и предложения для глоссария добавляются автоматически.
               </p>
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <label className="space-y-1">
+                  <span className="text-xs font-medium text-muted-foreground">Размер блока (символов)</span>
+                  <input
+                    type="number" min={2000} max={60000} step={1000}
+                    value={tSettings.chunkChars}
+                    onChange={(e) => setTSettings({ ...tSettings, chunkChars: parseInt(e.target.value, 10) || 0 })}
+                    className={fieldClass}
+                  />
+                  <span className="block text-[11px] text-muted-foreground">
+                    Больше — меньше запросов, но выше риск пропусков (они дозапрашиваются).
+                  </span>
+                </label>
+                <label className="space-y-1">
+                  <span className="text-xs font-medium text-muted-foreground">Параллельных запросов</span>
+                  <input
+                    type="number" min={1} max={8}
+                    value={tSettings.concurrency}
+                    onChange={(e) => setTSettings({ ...tSettings, concurrency: parseInt(e.target.value, 10) || 0 })}
+                    className={fieldClass}
+                  />
+                  <span className="block text-[11px] text-muted-foreground">
+                    Только платный API. При ошибках 429 уменьшите.
+                  </span>
+                </label>
+                <label className="space-y-1">
+                  <span className="text-xs font-medium text-muted-foreground">Уровень размышлений</span>
+                  <select
+                    value={tSettings.thinking}
+                    onChange={(e) => setTSettings({ ...tSettings, thinking: e.target.value as ThinkingSetting })}
+                    className={fieldClass}
+                  >
+                    <option value="default">По умолчанию модели</option>
+                    <option value="minimal">Minimal</option>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High (дороже и медленнее)</option>
+                  </select>
+                </label>
+                <label className="space-y-1">
+                  <span className="text-xs font-medium text-muted-foreground">Температура</span>
+                  <input
+                    type="number" min={0} max={2} step={0.1}
+                    placeholder="по умолчанию"
+                    value={tSettings.temperature ?? ''}
+                    onChange={(e) =>
+                      setTSettings({
+                        ...tSettings,
+                        temperature: e.target.value === '' ? null : parseFloat(e.target.value),
+                      })
+                    }
+                    className={fieldClass}
+                  />
+                  <span className="block text-[11px] text-muted-foreground">Пусто — значение модели.</span>
+                </label>
+              </div>
             </div>
           )}
         </div>

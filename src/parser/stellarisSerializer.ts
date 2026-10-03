@@ -23,9 +23,11 @@ export function serializeToStellaris(
     }
 
     const text = entry.translatedText || entry.originalText
-    // Escape double quotes in the text
-
-    const escaped = text.replace(/\n/g, '\\n');
+    // Parser unescapes \" to ", so re-escape (normalise first to stay idempotent)
+    const escaped = text
+      .replace(/\\"/g, '"')
+      .replace(/"/g, '\\"')
+      .replace(/\n/g, '\\n');
     const indexPart = (entry.index !== null && !isNaN(entry.index))
       ? `:${entry.index}`
       : '';
@@ -45,6 +47,7 @@ export function getExportPath(
   targetLang = 'russian'
 ): string {
   return relativePath
-    .replace(`l_${sourceLang}`, `l_${targetLang}`)
-    .replace(`_l_${sourceLang}`, `_l_${targetLang}`)
+    .split(`l_${sourceLang}`).join(`l_${targetLang}`)
+    // localisation/english/... → localisation/russian/...
+    .replace(new RegExp(`(^|/)${sourceLang}(?=/)`, 'g'), `$1${targetLang}`)
 }

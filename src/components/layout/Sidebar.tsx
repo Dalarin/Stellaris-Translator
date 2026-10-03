@@ -7,6 +7,7 @@ import {
   Upload,
   ChevronLeft,
   BarChart3,
+  Sparkles,
 } from 'lucide-react'
 import { useProject } from '@/store/ProjectContext'
 import { useGlossary } from '@/store/GlossaryContext'
@@ -14,6 +15,7 @@ import { useExport } from '@/hooks/useExport'
 import { calcTotalStats, calcProgress } from '@/utils/progressCalc'
 import { FileTree } from '../filetree/FileTree'
 import { ImportWizard } from '../project/ImportWizard'
+import { BulkTranslateDialog } from '../project/BulkTranslateDialog'
 import { ProgressBar } from '../shared/ProgressBar'
 import { cn } from '@/lib/utils'
 import { useMemo } from 'react'
@@ -30,6 +32,7 @@ export function Sidebar({ onOpenSearch, onOpenDashboard, onOpenProjects, current
   const { dispatch: glossaryDispatch } = useGlossary()
   const { exporting, exportProject } = useExport()
   const [showImport, setShowImport] = useState(false)
+  const [showBulk, setShowBulk] = useState(false)
 
   const totalStats = useMemo(() => calcTotalStats(state.files), [state.files])
   const totalPct = calcProgress(totalStats)
@@ -75,6 +78,13 @@ export function Sidebar({ onOpenSearch, onOpenDashboard, onOpenProjects, current
             <Upload size={13} /> Import Files
           </button>
           <button
+            onClick={() => setShowBulk(true)}
+            disabled={state.files.length === 0}
+            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-xs text-muted-foreground hover:bg-accent/10 hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Sparkles size={13} /> Translate project
+          </button>
+          <button
             onClick={onOpenSearch}
             className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-xs text-muted-foreground hover:bg-accent/10 hover:text-foreground transition-colors"
           >
@@ -117,6 +127,7 @@ export function Sidebar({ onOpenSearch, onOpenDashboard, onOpenProjects, current
         </div>
       )}
 
+      <BulkTranslateDialog open={showBulk} onClose={() => setShowBulk(false)} />
       <ImportWizard
         open={showImport}
         onClose={() => setShowImport(false)}

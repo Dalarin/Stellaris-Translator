@@ -100,6 +100,11 @@ export function FreeTranslateOverlay({ progress, error, done, onCancel, onDismis
             </div>
             <div className="space-y-1 text-sm text-muted-foreground">
               <p>Переведено строк: <span className="font-medium text-foreground">{done.total}</span></p>
+              {done.failedKeys.length > 0 && (
+                <p className="text-xs text-yellow-400/80">
+                  Не переведено: {done.failedKeys.length} — пропущены моделью или искажены переменные/коды. Запустите перевод ещё раз.
+                </p>
+              )}
               {!done.isComplete && <p className="text-yellow-400/80 text-xs">Дневной лимит исчерпан. Продолжите завтра (сброс в 03:00 МСК).</p>}
             </div>
             <div className="flex justify-end">

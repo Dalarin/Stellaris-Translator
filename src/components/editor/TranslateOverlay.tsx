@@ -1,11 +1,11 @@
 import { CheckCheck, AlertCircle, RefreshCw, Sparkles, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { RETRY_DELAYS_S, type TranslateProgress } from '@/services/geminiService'
+import { RETRY_DELAYS_S, type TranslateProgress, type TranslateResult } from '@/services/geminiService'
 
 export interface TranslateOverlayProps {
   progress: TranslateProgress | null
   error: string | null
-  done: { total: number } | null
+  done: TranslateResult | null
   onCancel: () => void
   onDismiss: () => void
 }
@@ -76,6 +76,12 @@ export function TranslateOverlay({ progress, error, done, onCancel, onDismiss }:
           <>
             <div className="flex items-center gap-2 text-green-400"><CheckCheck size={14} /><span className="text-sm font-semibold">Перевод завершён</span></div>
             <p className="text-sm text-muted-foreground">Переведено строк: <span className="font-medium text-foreground">{done.total}</span></p>
+            {done.failedKeys.length > 0 && (
+              <p className="text-xs text-yellow-400/80">
+                Не переведено: {done.failedKeys.length} — модель пропустила строки или исказила переменные/коды
+                ($VAR$, §Y, [..]). Запустите перевод ещё раз.
+              </p>
+            )}
             <div className="flex justify-end">
               <button onClick={onDismiss} className="rounded border border-primary/30 bg-primary/20 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/30">Готово</button>
             </div>

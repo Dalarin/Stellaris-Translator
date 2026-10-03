@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { X, Plus, Upload, Trash2 } from 'lucide-react'
+import { X, Plus, Upload, Trash2, Check, Sparkles } from 'lucide-react'
 import { useGlossary } from '@/store/GlossaryContext'
 import { useProject } from '@/store/ProjectContext'
 import { generateId } from '@/utils/idHelpers'
@@ -28,6 +28,17 @@ export function GlossaryPanel() {
     await upsertGlossaryEntries([entry])
     if (sourceRef.current) sourceRef.current.value = ''
     if (targetRef.current) targetRef.current.value = ''
+  }
+
+  const suggested = state.entries.filter((e) => e.status === 'suggested')
+  const accepted = state.entries.filter((e) => !e.status || e.status === 'accepted')
+
+  async function setStatus(entries: GlossaryEntry[], status: 'accepted' | 'rejected') {
+    if (entries.length === 0) return
+    // Rejected terms are kept (hidden) so the AI isn't allowed to suggest them again.
+    const updated = entries.map((e) => ({ ...e, status }))
+    for (const entry of updated) dispatch({ type: 'UPDATE_ENTRY', payload: entry })
+    await upsertGlossaryEntries(updated)
   }
 
   async function handleRemove(id: string) {
@@ -108,9 +119,61 @@ export function GlossaryPanel() {
         </button>
       </div>
 
+      {/* AI suggestions awaiting review */}
+      {suggested.length > 0 && (
+        <div className="border-b border-border bg-primary/5">
+          <div className="flex items-center justify-between px-2 py-1.5">
+            <span className="flex items-center gap-1 text-xs font-medium text-primary">
+              <Sparkles size={12} /> Предложено AI ({suggested.length})
+            </span>
+            <div className="flex items-center gap-2 text-[11px]">
+              <button
+                onClick={() => setStatus(suggested, 'accepted')}
+                className="text-green-400 hover:underline"
+              >
+                принять все
+              </button>
+              <button
+                onClick={() => setStatus(suggested, 'rejected')}
+                className="text-muted-foreground hover:text-destructive hover:underline"
+              >
+                отклонить все
+              </button>
+            </div>
+          </div>
+          <ul className="max-h-48 overflow-y-auto">
+            {suggested.map((entry) => (
+              <li key={entry.id} className="flex items-center gap-1 border-t border-border/50 px-2 py-1 text-xs">
+                <span className="min-w-0 flex-1 truncate text-foreground" title={entry.sourceTerm}>
+                  {entry.sourceTerm}
+                </span>
+                <span className="text-muted-foreground">→</span>
+                <span className="min-w-0 flex-1 truncate text-muted-foreground" title={entry.targetTerm}>
+                  {entry.targetTerm}
+                </span>
+                <button
+                  onClick={() => setStatus([entry], 'accepted')}
+                  className="rounded p-0.5 text-green-400 hover:bg-green-500/20"
+                  title="Принять"
+                >
+                  <Check size={12} />
+                </button>
+                <button
+                  onClick={() => setStatus([entry], 'rejected')}
+                  className="rounded p-0.5 text-muted-foreground hover:bg-destructive/20 hover:text-destructive"
+                  title="Отклонить"
+                >
+                  <X size={12} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Entries list */}
       <div className="flex-1 overflow-y-auto">
-        {state.entries.length === 0 ? (
+        {accepted.length === 0 ? (
           <p className="p-3 text-xs text-muted-foreground">
             No glossary terms. Add terms above or import a CSV file.
           </p>
@@ -124,7 +187,7 @@ export function GlossaryPanel() {
               </tr>
             </thead>
             <tbody>
-              {state.entries.map((entry) => (
+              {accepted.map((entry) => (
                 <tr key={entry.id} className="border-b border-border/50 hover:bg-accent/5">
                   <td className="px-2 py-1.5 text-foreground">{entry.sourceTerm}</td>
                   <td className="px-2 py-1.5 text-muted-foreground">{entry.targetTerm}</td>

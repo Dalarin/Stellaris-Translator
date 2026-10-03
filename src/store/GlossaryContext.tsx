@@ -10,6 +10,7 @@ type GlossaryAction =
   | { type: 'SET_ENTRIES'; payload: GlossaryEntry[] }
   | { type: 'ADD_ENTRY'; payload: GlossaryEntry }
   | { type: 'REMOVE_ENTRY'; payload: string }
+  | { type: 'UPDATE_ENTRY'; payload: GlossaryEntry }
   | { type: 'TOGGLE_PANEL' }
   | { type: 'CLOSE_PANEL' }
 
@@ -21,6 +22,11 @@ function glossaryReducer(state: GlossaryState, action: GlossaryAction): Glossary
       return { ...state, entries: [...state.entries, action.payload] }
     case 'REMOVE_ENTRY':
       return { ...state, entries: state.entries.filter((e) => e.id !== action.payload) }
+    case 'UPDATE_ENTRY':
+      return {
+        ...state,
+        entries: state.entries.map((e) => (e.id === action.payload.id ? action.payload : e)),
+      }
     case 'TOGGLE_PANEL':
       return { ...state, isOpen: !state.isOpen }
     case 'CLOSE_PANEL':

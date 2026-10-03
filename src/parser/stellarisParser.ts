@@ -52,10 +52,10 @@ export function parseStellaris(rawText: string): ParseResult {
 
     // Entry: KEY:INDEX "text"  (possibly multi-line)
     // Match key:index then opening quote
-    const entryStart = trimmed.match(/^([\w.:\-]+)(?::(\d+))?\s+"/)
+    const entryStart = trimmed.match(/^([\w.@\-]+)(?::(\d+))?\s+"/)
     if (entryStart) {
       const key = entryStart[1]
-      const index = parseInt(entryStart[2]) ?? null;
+      const index = entryStart[2] !== undefined ? parseInt(entryStart[2]) : null
 
       // Find the start of the quoted value
       const lineStr = trimmed

@@ -9,6 +9,10 @@ export interface TranslationEntry {
   translatedText: string
   category: string | null
   status: EntryStatus
+  /** English text the current translation was made for; set when status is 'outdated' */
+  previousOriginalText?: string
+  /** Outdated, but the English text changed only slightly — usually a quick touch-up of the translation */
+  minorChange?: boolean
 }
 
 export interface TranslationFile {
@@ -31,7 +35,11 @@ export interface GlossaryEntry {
   projectId: string
   sourceTerm: string
   targetTerm: string
+  /** Absent = accepted (legacy entries). 'suggested' comes from the AI and awaits review. */
+  status?: GlossaryStatus
 }
+
+export type GlossaryStatus = 'accepted' | 'suggested' | 'rejected'
 
 export interface TreeNode {
   name: string
@@ -48,4 +56,16 @@ export interface FileStats {
   outdated: number
   missing: number
   total: number
+}
+
+export type ThinkingSetting = 'default' | 'minimal' | 'low' | 'medium' | 'high'
+
+/** Per-project knobs for the paid Gemini translation run */
+export interface TranslateSettings {
+  chunkChars: number
+  thinking: ThinkingSetting
+  /** null = model default */
+  temperature: number | null
+  /** parallel requests (paid API) */
+  concurrency: number
 }

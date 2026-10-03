@@ -3,8 +3,11 @@ import { useEditor } from '@/store/EditorContext'
 import { useProject } from '@/store/ProjectContext'
 import { useAutoMatch } from '@/hooks/useAutoMatch'
 import { useGlossary } from '@/store/GlossaryContext'
-import { upsertTranslationFile, getGeminiSettings, getProjectGeminiPrompt } from '@/db/operations'
-import { DEFAULT_SYSTEM_PROMPT } from '@/services/geminiService'
+import { upsertTranslationFile, getGeminiSettings } from '@/db/operations'
+import { type TranslateResult } from '@/services/geminiService'
+import { loadRunConfig } from '@/services/runConfig'
+import { useApplyTranslations } from '@/hooks/useApplyTranslations'
+import { useGlossarySuggestions } from '@/hooks/useGlossarySuggestions'
 import { ColorCodePreview } from './ColorCodePreview'
 import { GeminiSettingsDialog } from './GeminiSettingsDialog'
 import { AIActions } from './AIActions'
@@ -27,18 +30,13 @@ const statusBorderClass: Record<EntryStatus, string> = {
   missing: 'border-input',
 }
 
-function buildPromptWithGlossary(basePrompt: string, glossaryEntries: { sourceTerm: string; targetTerm: string }[]): string {
-  if (glossaryEntries.length === 0) return basePrompt
-  const lines = glossaryEntries.map((e) => `  ${e.sourceTerm} → ${e.targetTerm}`).join('\n')
-  return `${basePrompt}\n\nГлоссарий (обязательно использовать при переводе этих терминов):\n${lines}`
-}
-
 export function TranslationPanel() {
   const { state, dispatch } = useEditor()
   const { state: projectState, dispatch: projectDispatch } = useProject()
   const { isMatching, matchFile } = useAutoMatch()
   const { state: glossaryState } = useGlossary()
   const entry = state.activeEntry
+  const { startRun: startGlossaryRun } = useGlossarySuggestions(state.activeFile?.projectId)
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -48,7 +46,7 @@ export function TranslationPanel() {
 
   const [translateProgress, setTranslateProgress] = useState<TranslateProgress | null>(null)
   const [translateError, setTranslateError] = useState<string | null>(null)
-  const [translateDone, setTranslateDone] = useState<{ total: number } | null>(null)
+  const [translateDone, setTranslateDone] = useState<TranslateResult | null>(null)
 
   const [freeProgress, setFreeProgress] = useState<FreeTranslateProgress | null>(null)
   const [freeError, setFreeError] = useState<string | null>(null)
@@ -108,20 +106,19 @@ export function TranslationPanel() {
 
   // ─── AI handlers ─────────────────────────────────────────────────────────────
 
-  const applyChunkUpdates = useCallback((updates: Map<string, string>) => {
-    for (const [key, text] of updates) {
-      dispatch({ type: 'UPDATE_ENTRY_TEXT', payload: { key, text } })
-      dispatch({ type: 'MARK_ENTRY_TRANSLATED', payload: key })
-    }
-  }, [dispatch])
+  const { apply: applyUpdatesToFile, flush: flushApplied } = useApplyTranslations()
 
   const handleAutoTranslate = useCallback(async () => {
-    if (!state.activeFile) return
-    const [settings, savedPrompt] = await Promise.all([
-      getGeminiSettings(),
-      getProjectGeminiPrompt(state.activeFile.projectId),
-    ])
+    const file = state.activeFile
+    if (!file) return
+    const settings = await getGeminiSettings()
     if (!settings?.apiKey) { setGeminiSettingsOpen(true); return }
+    const { basePrompt, options } = await loadRunConfig(
+      file.projectId,
+      projectState.files.map((f) => (f.id === file.id ? file : f)),
+      glossaryState.entries,
+      startGlossaryRun(),
+    )
 
     setTranslateError(null)
     setTranslateDone(null)
@@ -129,15 +126,17 @@ export function TranslationPanel() {
     abortRef.current = ctrl
     try {
       const result = await autoTranslateFile(
-        state.activeFile.entries,
+        file.entries,
         settings.apiKey,
         settings.model,
-        buildPromptWithGlossary(savedPrompt ?? DEFAULT_SYSTEM_PROMPT, glossaryState.entries),
-        state.activeFile.relativePath,
+        basePrompt,
+        file.relativePath,
         (p) => setTranslateProgress(p),
-        applyChunkUpdates,
+        (updates) => { void applyUpdatesToFile(file.id, updates) },
         ctrl.signal,
+        options,
       )
+      await flushApplied()
       setTranslateDone(result)
     } catch (err) {
       if (!ctrl.signal.aborted) setTranslateError(GeminiError.from(err).userMessage)
@@ -145,16 +144,20 @@ export function TranslationPanel() {
       setTranslateProgress(null)
       abortRef.current = null
     }
-  }, [state.activeFile, applyChunkUpdates])
+  }, [state.activeFile, projectState.files, glossaryState.entries, startGlossaryRun, applyUpdatesToFile, flushApplied])
 
   const handleFreeAutoTranslate = useCallback(async () => {
-    if (!state.activeFile) return
-    const [settings, savedPrompt] = await Promise.all([
-      getGeminiSettings(),
-      getProjectGeminiPrompt(state.activeFile.projectId),
-    ])
+    const file = state.activeFile
+    if (!file) return
+    const settings = await getGeminiSettings()
     const freeApiKeys = settings?.freeApiKeys?.filter((k) => k.trim()) ?? []
     if (freeApiKeys.length === 0) { setGeminiSettingsOpen(true); return }
+    const { basePrompt, options } = await loadRunConfig(
+      file.projectId,
+      projectState.files.map((f) => (f.id === file.id ? file : f)),
+      glossaryState.entries,
+      startGlossaryRun(),
+    )
 
     setFreeError(null)
     setFreeDone(null)
@@ -162,14 +165,16 @@ export function TranslationPanel() {
     freeAbortRef.current = ctrl
     try {
       const result = await autoTranslateFree(
-        state.activeFile.entries,
+        file.entries,
         freeApiKeys,
-        buildPromptWithGlossary(savedPrompt ?? DEFAULT_SYSTEM_PROMPT, glossaryState.entries),
-        state.activeFile.relativePath,
+        basePrompt,
+        file.relativePath,
         (p) => setFreeProgress(p),
-        applyChunkUpdates,
+        (updates) => { void applyUpdatesToFile(file.id, updates) },
         ctrl.signal,
+        options,
       )
+      await flushApplied()
       setFreeDone(result)
     } catch (err) {
       if (!ctrl.signal.aborted) setFreeError(GeminiError.from(err).userMessage)
@@ -177,7 +182,7 @@ export function TranslationPanel() {
       setFreeProgress(null)
       freeAbortRef.current = null
     }
-  }, [state.activeFile, applyChunkUpdates])
+  }, [state.activeFile, projectState.files, glossaryState.entries, startGlossaryRun, applyUpdatesToFile, flushApplied])
 
   // ─── Auto-match ─────────────────────────────────────────────────────────────
 

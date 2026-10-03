@@ -34,6 +34,11 @@ export function matchEntry(
   if (ref.originalText === enEntry.originalText) {
     return { ...enEntry, translatedText: ref.translatedText, status: 'translated' }
   } else {
-    return { ...enEntry, translatedText: ref.translatedText, status: 'outdated' }
+    return {
+      ...enEntry,
+      translatedText: ref.translatedText,
+      status: 'outdated',
+      previousOriginalText: ref.originalText,
+    }
   }
 }

@@ -38,8 +38,8 @@ export type RateLimitDecision =
 function parseRetryDelay(details: GeminiErrorDetail[]): number | null {
   for (const d of details) {
     if (d.retryDelay) {
-      const m = d.retryDelay.match(/^(\d+)s$/)
-      if (m) return parseInt(m[1], 10)
+      const m = d.retryDelay.match(/^(\d+(?:\.\d+)?)s$/)
+      if (m) return Math.ceil(parseFloat(m[1]))
     }
   }
   return null

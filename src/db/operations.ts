@@ -1,5 +1,6 @@
 import { db } from './schema'
-import type { Project, TranslationFile, GlossaryEntry } from '@/types'
+import { LEGACY_DEFAULT_SYSTEM_PROMPTS, DEFAULT_TRANSLATE_SETTINGS } from '@/services/geminiService'
+import type { Project, TranslationFile, GlossaryEntry, TranslateSettings } from '@/types'
 
 // --- Projects ---
 
@@ -30,6 +31,14 @@ export async function deleteProject(id: string): Promise<void> {
 
 export async function getFilesForProject(projectId: string): Promise<TranslationFile[]> {
   return db.translationFiles.where('projectId').equals(projectId).toArray()
+}
+
+export async function getTranslationFile(id: string): Promise<TranslationFile | undefined> {
+  return db.translationFiles.get(id)
+}
+
+export async function deleteTranslationFiles(ids: string[]): Promise<void> {
+  await db.translationFiles.bulkDelete(ids)
 }
 
 export async function upsertTranslationFile(file: TranslationFile): Promise<void> {
@@ -117,9 +126,66 @@ export async function setFreeApiKeys(freeApiKeys: string[]): Promise<void> {
 
 export async function getProjectGeminiPrompt(projectId: string): Promise<string | null> {
   const record = await db.meta.get(`geminiPrompt_${projectId}`)
-  return record?.value ?? null
+  if (!record) return null
+  // Untouched old default → fall back to the current default prompt
+  if (LEGACY_DEFAULT_SYSTEM_PROMPTS.includes(record.value)) return null
+  return record.value
 }
 
 export async function setProjectGeminiPrompt(projectId: string, prompt: string): Promise<void> {
   await db.meta.put({ key: `geminiPrompt_${projectId}`, value: prompt })
+}
+
+// --- Per-project translation settings (chunk size, thinking, temperature, concurrency) ---
+
+export async function getProjectTranslateSettings(projectId: string): Promise<TranslateSettings> {
+  const record = await db.meta.get(`translateSettings_${projectId}`)
+  let stored: Partial<TranslateSettings> = {}
+  if (record) {
+    try { stored = JSON.parse(record.value) as Partial<TranslateSettings> } catch { /* use defaults */ }
+  } else {
+    // Settings saved before translateSettings existed only had the chunk size
+    const legacy = await db.meta.get(`chunkChars_${projectId}`)
+    const n = legacy ? parseInt(legacy.value, 10) : NaN
+    if (Number.isFinite(n) && n > 0) stored = { chunkChars: n }
+  }
+  return { ...DEFAULT_TRANSLATE_SETTINGS, ...stored }
+}
+
+export async function setProjectTranslateSettings(
+  projectId: string,
+  settings: TranslateSettings,
+): Promise<void> {
+  await db.meta.put({ key: `translateSettings_${projectId}`, value: JSON.stringify(settings) })
+}
+
+// --- Vanilla translation memory ---
+
+export async function replaceVanillaMemory(pairs: Map<string, string>): Promise<void> {
+  const rows = Array.from(pairs, ([text, translation]) => ({ text, translation }))
+  await db.transaction('rw', db.vanillaMemory, async () => {
+    await db.vanillaMemory.clear()
+    await db.vanillaMemory.bulkPut(rows)
+  })
+}
+
+export async function getVanillaMemory(): Promise<Map<string, string>> {
+  const rows = await db.vanillaMemory.toArray()
+  return new Map(rows.map((r) => [r.text, r.translation]))
+}
+
+export async function getVanillaMemoryCount(): Promise<number> {
+  return db.vanillaMemory.count()
+}
+
+// --- Bulk translation price inputs (per 1M tokens, free-form text as typed) ---
+
+export async function getBulkPrices(): Promise<{ input: string; output: string } | null> {
+  const record = await db.meta.get('bulkPrices')
+  if (!record) return null
+  try { return JSON.parse(record.value) as { input: string; output: string } } catch { return null }
+}
+
+export async function setBulkPrices(prices: { input: string; output: string }): Promise<void> {
+  await db.meta.put({ key: 'bulkPrices', value: JSON.stringify(prices) })
 }
