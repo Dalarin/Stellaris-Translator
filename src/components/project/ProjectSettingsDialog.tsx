@@ -6,7 +6,8 @@ import {
   getProjectTranslateSettings,
   setProjectTranslateSettings,
 } from '@/db/operations'
-import { DEFAULT_SYSTEM_PROMPT, DEFAULT_TRANSLATE_SETTINGS } from '@/services/geminiService'
+import { DEFAULT_TRANSLATE_SETTINGS } from '@/services/translateTypes'
+import { getGameProfile, type GameId } from '@/games'
 import type { TranslateSettings, ThinkingSetting } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -16,28 +17,31 @@ const fieldClass =
 interface ProjectSettingsDialogProps {
   projectId: string
   projectName: string
+  game?: GameId
   onClose: () => void
 }
 
 export function ProjectSettingsDialog({
   projectId,
   projectName,
+  game: gameId,
   onClose,
 }: ProjectSettingsDialogProps) {
   const [systemPrompt, setSystemPrompt] = useState('')
   const [tSettings, setTSettings] = useState<TranslateSettings>(DEFAULT_TRANSLATE_SETTINGS)
+  const game = getGameProfile(gameId)
   const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     Promise.all([getProjectGeminiPrompt(projectId), getProjectTranslateSettings(projectId)]).then(
       ([prompt, translateSettings]) => {
-        setSystemPrompt(prompt ?? DEFAULT_SYSTEM_PROMPT)
+        setSystemPrompt(prompt ?? game.defaultPrompt)
         setTSettings(translateSettings)
         setLoading(false)
       },
     )
-  }, [projectId])
+  }, [projectId, game])
 
   async function handleSave() {
     await setProjectGeminiPrompt(projectId, systemPrompt)
@@ -64,7 +68,7 @@ export function ProjectSettingsDialog({
           <div className="flex items-center gap-2">
             <SlidersHorizontal size={13} className="text-muted-foreground" />
             <span className="text-sm font-semibold">Настройки проекта</span>
-            <span className="text-sm text-muted-foreground">— {projectName}</span>
+            <span className="text-sm text-muted-foreground">— {projectName} · {game.name}</span>
           </div>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
             <X size={15} />
@@ -82,7 +86,7 @@ export function ProjectSettingsDialog({
                   Системный промпт для Gemini
                 </label>
                 <button
-                  onClick={() => setSystemPrompt(DEFAULT_SYSTEM_PROMPT)}
+                  onClick={() => setSystemPrompt(game.defaultPrompt)}
                   className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
                   title="Сбросить к значению по умолчанию"
                 >

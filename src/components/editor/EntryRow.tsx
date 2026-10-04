@@ -1,7 +1,7 @@
 import { memo } from 'react'
 import { cn } from '@/lib/utils'
 import type { TranslationEntry } from '@/types'
-import { stripColorCodes } from '@/parser/colorCodes'
+import { useGame } from '@/hooks/useGame'
 
 interface Props {
   entry: TranslationEntry
@@ -17,7 +17,8 @@ const STATUS_INDICATOR = {
 }
 
 export const EntryRow = memo(function EntryRow({ entry, isActive, onClick }: Props) {
-  const preview = stripColorCodes(entry.originalText).slice(0, 60)
+  const game = useGame()
+  const preview = game.stripFormatting(entry.originalText).slice(0, 60)
 
   return (
     <button

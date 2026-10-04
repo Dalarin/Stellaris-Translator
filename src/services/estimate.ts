@@ -1,4 +1,5 @@
-import { buildChunkPrompt, formatChunk, prepareRun, type TranslateOptions } from '@/services/geminiService'
+import { buildChunkPrompt, formatChunk, prepareRun } from '@/services/chunking'
+import { type TranslateOptions } from '@/services/translateTypes'
 import type { TranslationEntry } from '@/types'
 
 // Rough tokenizer ratios — good for planning, not for billing.

@@ -1,4 +1,4 @@
-import { parseFile } from '@/parser/stellarisParser'
+import type { GameProfile } from '@/games'
 import { isTrivial, tokensMatch } from '@/services/translationPrep'
 import type { TranslationEntry } from '@/types'
 
@@ -9,6 +9,7 @@ import type { TranslationEntry } from '@/types'
 export async function buildVanillaPairs(
   enFiles: Map<string, File>,
   ruFiles: Map<string, File>,
+  game: GameProfile,
   onProgress?: (done: number, total: number) => void,
 ): Promise<Map<string, string>> {
   const ru = new Map<string, TranslationEntry>()
@@ -17,7 +18,7 @@ export async function buildVanillaPairs(
 
   for (const file of ruFiles.values()) {
     try {
-      for (const e of (await parseFile(file)).entries) if (!ru.has(e.key)) ru.set(e.key, e)
+      for (const e of game.parse(await file.text()).entries) if (!ru.has(e.key)) ru.set(e.key, e)
     } catch { /* skip unreadable file */ }
     onProgress?.(++done, total)
   }
@@ -25,12 +26,12 @@ export async function buildVanillaPairs(
   const pairs = new Map<string, string>()
   for (const file of enFiles.values()) {
     try {
-      for (const en of (await parseFile(file)).entries) {
+      for (const en of game.parse(await file.text()).entries) {
         const r = ru.get(en.key)
-        if (!r || !r.originalText || isTrivial(en.originalText)) continue
+        if (!r || !r.originalText || isTrivial(en.originalText, game)) continue
         // Different version index ⇒ the RU text belongs to an older EN text
         if (en.index !== null && r.index !== null && en.index !== r.index) continue
-        if (!tokensMatch(en.originalText, r.originalText)) continue
+        if (!tokensMatch(en.originalText, r.originalText, game)) continue
         if (!pairs.has(en.originalText)) pairs.set(en.originalText, r.originalText)
       }
     } catch { /* skip unreadable file */ }

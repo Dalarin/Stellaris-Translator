@@ -11,12 +11,21 @@ interface VanillaMemoryRecord {
   translation: string
 }
 
+interface GameMemoryRecord {
+  /** `${game}\u0000${text}` */
+  id: string
+  game: string
+  text: string
+  translation: string
+}
+
 class StellarisTlDB extends Dexie {
   projects!: Table<Project, string>
   translationFiles!: Table<TranslationFile, string>
   glossaryEntries!: Table<GlossaryEntry, string>
   meta!: Table<MetaRecord, string>
   vanillaMemory!: Table<VanillaMemoryRecord, string>
+  gameMemory!: Table<GameMemoryRecord, string>
 
   constructor() {
     super('StellarisTlDB')
@@ -54,6 +63,22 @@ class StellarisTlDB extends Dexie {
       meta: '&key',
       vanillaMemory: '&text',
     })
+    // v4: vanilla memory is per game. The v3 table (Stellaris only) moves into gameMemory.
+    this.version(4)
+      .stores({
+        projects: '&id, name, createdAt, updatedAt',
+        translationFiles: '&id, projectId, relativePath, [projectId+relativePath]',
+        glossaryEntries: '&id, projectId, sourceTerm',
+        meta: '&key',
+        vanillaMemory: null,
+        gameMemory: '&id, game',
+      })
+      .upgrade(async (tx) => {
+        const old = (await tx.table('vanillaMemory').toArray()) as VanillaMemoryRecord[]
+        await tx.table('gameMemory').bulkPut(
+          old.map((r) => ({ id: `stellaris\u0000${r.text}`, game: 'stellaris', text: r.text, translation: r.translation })),
+        )
+      })
   }
 }
 

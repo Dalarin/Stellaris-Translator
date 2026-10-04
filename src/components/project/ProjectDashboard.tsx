@@ -7,6 +7,7 @@ import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 import { calcTotalStats, calcProgress } from '@/utils/progressCalc'
 import { ProgressBar } from '../shared/ProgressBar'
 import type { Project } from '@/types'
+import { getGameProfile } from '@/games'
 
 interface Props {
   onProjectOpen: () => void
@@ -105,6 +106,7 @@ export function ProjectDashboard({ onProjectOpen }: Props) {
                   <div className="flex items-start justify-between">
                     <div className="min-w-0 flex-1">
                       <div className="font-medium text-foreground truncate">{project.name}</div>
+                      <div className="text-[10px] text-primary/80">{getGameProfile(project.game).name}</div>
                       <div className="mt-0.5 flex items-center gap-1 text-[10px] text-muted-foreground">
                         <Clock size={10} />
                         {new Date(project.updatedAt).toLocaleDateString()}
@@ -146,6 +148,7 @@ export function ProjectDashboard({ onProjectOpen }: Props) {
         <ProjectSettingsDialog
           projectId={settingsFor.id}
           projectName={settingsFor.name}
+          game={settingsFor.game}
           onClose={() => setSettingsFor(null)}
         />
       )}

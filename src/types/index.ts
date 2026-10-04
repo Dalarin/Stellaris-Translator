@@ -1,3 +1,5 @@
+import type { GameId } from '@/games/types'
+
 export type EntryStatus = 'translated' | 'approved' | 'outdated' | 'missing'
 
 export type StatusFilter = 'all' | EntryStatus
@@ -26,6 +28,8 @@ export interface TranslationFile {
 export interface Project {
   id: string
   name: string
+  /** Absent on projects created before games existed — those are Stellaris */
+  game?: GameId
   createdAt: Date
   updatedAt: Date
 }

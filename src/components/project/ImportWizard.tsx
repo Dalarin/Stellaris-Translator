@@ -12,6 +12,7 @@ import {
 } from '@/db/operations'
 import { collectFilesFromInput } from '@/utils/fileHelpers'
 import { buildVanillaPairs } from '@/utils/vanilla'
+import { useGame } from '@/hooks/useGame'
 import { cn } from '@/lib/utils'
 import type { Project, TranslationFile } from '@/types'
 
@@ -26,7 +27,8 @@ type Step = 'select' | 'importing' | 'done'
 export function ImportWizard({ open, onClose, onDone }: Props) {
   const { state, dispatch } = useProject()
   const projectId = state.activeProject?.id ?? ''
-  const { progress, report, importFromFileLists, importFromDirectories, reset } = useImport(projectId)
+  const game = useGame()
+  const { progress, report, importFromFileLists, importFromDirectories, reset } = useImport(projectId, game)
 
   const [step, setStep] = useState<Step>('select')
   const [hasRu, setHasRu] = useState(true)
@@ -57,7 +59,7 @@ export function ImportWizard({ open, onClose, onDone }: Props) {
     getProjects().then((projects) => {
       setOtherProjects(projects.filter((p) => p.id !== projectId))
     })
-    getVanillaMemoryCount().then(setVanillaCount)
+    getVanillaMemoryCount(game.id).then(setVanillaCount)
   }, [open, projectId])
 
   async function handleReferenceProjectChange(id: string) {
@@ -79,14 +81,15 @@ export function ImportWizard({ open, onClose, onDone }: Props) {
       const pairs = await buildVanillaPairs(
         collectFilesFromInput(enList),
         collectFilesFromInput(ruList),
+        game,
         (done, total) => setPrepMessage(`Parsing vanilla localisation... ${done}/${total}`),
       )
-      await replaceVanillaMemory(pairs)
+      await replaceVanillaMemory(game.id, pairs)
       setVanillaCount(pairs.size)
       setPrepMessage('')
       return useVanilla ? pairs : undefined
     }
-    return useVanilla && vanillaCount > 0 ? getVanillaMemory() : undefined
+    return useVanilla && vanillaCount > 0 ? getVanillaMemory(game.id) : undefined
   }
 
   async function handleDeleteStale() {
@@ -322,7 +325,7 @@ export function ImportWizard({ open, onClose, onDone }: Props) {
                   <p className="text-xs text-muted-foreground">
                     {vanillaCount > 0
                       ? `В базе: ${vanillaCount} строк. Выберите обе папки, чтобы обновить.`
-                      : 'Папки localisation/english и localisation/russian из папки игры. Подставляются строки с точно таким же английским текстом.'}
+                      : `Папки ${game.locFolder}/english и ${game.locFolder}/russian из папки игры. Подставляются строки с точно таким же английским текстом.`}
                   </p>
                   <div className="grid grid-cols-2 gap-2">
                     {([

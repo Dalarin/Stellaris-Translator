@@ -1,24 +1,29 @@
+import { getGameProfile, type GameProfile } from '@/games'
 import type { TranslationEntry, TranslationFile } from '@/types'
 
-// Everything the game interprets and the translation must keep verbatim:
-// $VAR$, §Y / §!, [Root.GetName], £icon£, @icon@, %SEQ%, literal \n
-const TOKEN_RE = /\$[^$\s"]*\$|§.|\[[^\]\n"]*\]|£[^£\s"]*£|@\w+@?|%\w+%|\\n/g
+// Everything the game interprets and the translation must keep verbatim ($VAR$, color
+// codes, scripted [..] calls, icons, literal \n) is defined per game by GameProfile.tokenRegex.
+// Every helper takes the profile last; omitted means the default game (Stellaris).
 
-export function extractTokens(text: string): string[] {
-  return (text.match(TOKEN_RE) ?? []).sort()
+export function extractTokens(text: string, game: GameProfile = getGameProfile()): string[] {
+  return (text.match(game.tokenRegex) ?? []).sort()
 }
 
 /** True when `translated` keeps exactly the same game tokens as `original`. */
-export function tokensMatch(original: string, translated: string): boolean {
+export function tokensMatch(
+  original: string,
+  translated: string,
+  game: GameProfile = getGameProfile(),
+): boolean {
   if (original.trim() !== '' && translated.trim() === '') return false
-  const a = extractTokens(original)
-  const b = extractTokens(translated)
+  const a = extractTokens(original, game)
+  const b = extractTokens(translated, game)
   return a.length === b.length && a.every((t, i) => t === b[i])
 }
 
 /** Nothing to translate: only tokens, digits, punctuation and whitespace. */
-export function isTrivial(text: string): boolean {
-  return text.replace(TOKEN_RE, '').replace(/[\s\d\p{P}\p{S}]/gu, '') === ''
+export function isTrivial(text: string, game: GameProfile = getGameProfile()): boolean {
+  return text.replace(game.tokenRegex, '').replace(/[\s\d\p{P}\p{S}]/gu, '') === ''
 }
 
 export function escapeQuotes(text: string): string {
@@ -37,13 +42,16 @@ function isDone(e: TranslationEntry): boolean {
  * Translation memory: exact English text → existing translation, taken from every
  * translated/approved entry in the project. Approved translations win.
  */
-export function buildTranslationMemory(files: TranslationFile[]): Map<string, string> {
+export function buildTranslationMemory(
+  files: TranslationFile[],
+  game: GameProfile = getGameProfile(),
+): Map<string, string> {
   const memory = new Map<string, string>()
   const fromApproved = new Set<string>()
   for (const file of files) {
     for (const e of file.entries) {
-      if (!isDone(e) || !e.translatedText || isTrivial(e.originalText)) continue
-      if (!tokensMatch(e.originalText, e.translatedText)) continue
+      if (!isDone(e) || !e.translatedText || isTrivial(e.originalText, game)) continue
+      if (!tokensMatch(e.originalText, e.translatedText, game)) continue
       const approved = e.status === 'approved'
       if (!memory.has(e.originalText) || (approved && !fromApproved.has(e.originalText))) {
         memory.set(e.originalText, e.translatedText)
@@ -63,7 +71,11 @@ export interface WorkPlan {
   duplicates: Map<string, string[]>
 }
 
-export function planWork(entries: TranslationEntry[], memory?: Map<string, string>): WorkPlan {
+export function planWork(
+  entries: TranslationEntry[],
+  memory?: Map<string, string>,
+  game: GameProfile = getGameProfile(),
+): WorkPlan {
   const instant = new Map<string, string>()
   const skip = new Set<string>()
   const duplicates = new Map<string, string[]>()
@@ -72,7 +84,7 @@ export function planWork(entries: TranslationEntry[], memory?: Map<string, strin
   for (const e of entries) {
     if (isDone(e)) continue
 
-    if (isTrivial(e.originalText)) {
+    if (isTrivial(e.originalText, game)) {
       instant.set(e.key, e.originalText)
       skip.add(e.key)
       continue
@@ -103,6 +115,7 @@ export function planWork(entries: TranslationEntry[], memory?: Map<string, strin
 export function splitValid(
   chunkEntries: TranslationEntry[],
   got: Map<string, string>,
+  game: GameProfile = getGameProfile(),
 ): { valid: Map<string, string>; invalidKeys: string[] } {
   const byKey = new Map(chunkEntries.map((e) => [e.key, e]))
   const valid = new Map<string, string>()
@@ -110,7 +123,7 @@ export function splitValid(
   for (const [key, text] of got) {
     const entry = byKey.get(key)
     if (!entry) continue
-    if (tokensMatch(entry.originalText, text)) valid.set(key, text)
+    if (tokensMatch(entry.originalText, text, game)) valid.set(key, text)
     else invalidKeys.push(key)
   }
   return { valid, invalidKeys }

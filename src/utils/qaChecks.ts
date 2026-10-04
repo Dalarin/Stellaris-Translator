@@ -1,4 +1,5 @@
 import { extractTokens, isTrivial } from '@/services/translationPrep'
+import { getGameProfile, type GameProfile } from '@/games'
 import type { GlossaryEntry, TranslationEntry } from '@/types'
 
 export type QaKind = 'tokens' | 'english' | 'length' | 'glossary'
@@ -33,23 +34,22 @@ function stem(word: string): string {
   return word.length > 4 ? word.slice(0, -2) : word
 }
 
-const TOKEN_STRIP_RE = /\$[^$\s"]*\$|§.|\[[^\]\n"]*\]|£[^£\s"]*£|@\w+@?|%\w+%|\\n/g
-
 export function checkEntries(
   entries: TranslationEntry[],
   glossary: readonly GlossaryEntry[],
+  game: GameProfile = getGameProfile(),
 ): QaIssue[] {
   const terms = glossary.filter((g) => !g.status || g.status === 'accepted')
   const issues: QaIssue[] = []
 
   for (const e of entries) {
-    if (e.status === 'missing' || !e.translatedText || isTrivial(e.originalText)) continue
+    if (e.status === 'missing' || !e.translatedText || isTrivial(e.originalText, game)) continue
     const orig = e.originalText
     const tr = e.translatedText
 
     // Missing or extra game tokens
-    const ot = extractTokens(orig)
-    const tt = extractTokens(tr)
+    const ot = extractTokens(orig, game)
+    const tt = extractTokens(tr, game)
     const lost = missingFrom(ot, tt)
     const extra = missingFrom(tt, ot)
     if (lost.length > 0 || extra.length > 0) {
@@ -60,7 +60,7 @@ export function checkEntries(
     }
 
     // Latin words but no Cyrillic at all — probably left untranslated
-    const plain = tr.replace(TOKEN_STRIP_RE, ' ')
+    const plain = tr.replace(game.tokenRegex, ' ')
     if (tr === orig) {
       if (/[A-Za-z]{4,}/.test(plain) && e.status !== 'approved') {
         issues.push({ key: e.key, kind: 'english', message: 'Перевод совпадает с оригиналом' })

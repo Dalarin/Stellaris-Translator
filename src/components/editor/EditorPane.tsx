@@ -11,10 +11,12 @@ import { QaPanel } from './QaPanel'
 import { checkEntries } from '@/utils/qaChecks'
 import { AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useGame } from '@/hooks/useGame'
 
 export function EditorPane() {
   const { state } = useEditor()
   const { state: glossaryState } = useGlossary()
+  const game = useGame()
 
   const stats = useMemo(
     () => (state.activeFile ? calcFileStats(state.activeFile) : null),
@@ -24,8 +26,8 @@ export function EditorPane() {
 
   const [qaOpen, setQaOpen] = useState(false)
   const qaIssues = useMemo(
-    () => (state.activeFile && qaOpen ? checkEntries(state.activeFile.entries, glossaryState.entries) : []),
-    [state.activeFile, glossaryState.entries, qaOpen],
+    () => (state.activeFile && qaOpen ? checkEntries(state.activeFile.entries, glossaryState.entries, game) : []),
+    [state.activeFile, glossaryState.entries, qaOpen, game],
   )
 
   if (!state.activeFile) {

@@ -1,14 +1,12 @@
-import type { TranslationFile, TranslationEntry } from '@/types'
+import type { TranslationFile } from '@/types'
 
 /**
- * Serializes a TranslationFile back to Stellaris YAML format.
+ * Serializes a TranslationFile back to Paradox localisation YAML.
  * Uses translatedText if available, falls back to originalText.
- * Outputs the target language header (e.g. l_russian:)
+ * Outputs the target language header (e.g. l_russian:). Entries that had a version
+ * number keep it (`KEY:0 "x"`); the rest stay unversioned (`KEY: "x"`).
  */
-export function serializeToStellaris(
-  file: TranslationFile,
-  targetLanguage = 'russian'
-): string {
+export function serializeLoc(file: TranslationFile, targetLanguage = 'russian'): string {
   const lines: string[] = [`l_${targetLanguage}:\n`]
 
   let lastCategory: string | null | undefined = undefined
@@ -27,19 +25,20 @@ export function serializeToStellaris(
     const escaped = text
       .replace(/\\"/g, '"')
       .replace(/"/g, '\\"')
-      .replace(/\n/g, '\\n');
-    const indexPart = (entry.index !== null && !isNaN(entry.index))
-      ? `:${entry.index}`
-      : '';
+      .replace(/\n/g, '\\n')
+    const version = entry.index !== null && entry.index !== undefined && !isNaN(entry.index)
+      ? String(entry.index)
+      : ''
 
-    lines.push(` ${entry.key}${indexPart} "${escaped}"\n`);
+    lines.push(` ${entry.key}:${version} "${escaped}"\n`)
   }
 
   return lines.join('')
 }
 
 /**
- * Returns the export path for a file, replacing the source language with target language.
+ * Returns the export path for a file, replacing the source language with target language
+ * in the file name (`_l_english.yml`) and in a language folder (`localization/english/`).
  */
 export function getExportPath(
   relativePath: string,
@@ -48,6 +47,5 @@ export function getExportPath(
 ): string {
   return relativePath
     .split(`l_${sourceLang}`).join(`l_${targetLang}`)
-    // localisation/english/... → localisation/russian/...
     .replace(new RegExp(`(^|/)${sourceLang}(?=/)`, 'g'), `$1${targetLang}`)
 }

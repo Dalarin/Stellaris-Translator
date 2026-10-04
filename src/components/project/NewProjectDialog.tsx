@@ -3,6 +3,8 @@ import { X } from 'lucide-react'
 import { generateId } from '@/utils/idHelpers'
 import { createProject, setLastProjectId } from '@/db/operations'
 import { useProject } from '@/store/ProjectContext'
+import { GAMES, DEFAULT_GAME, type GameId } from '@/games'
+import { cn } from '@/lib/utils'
 
 interface Props {
   open: boolean
@@ -12,6 +14,7 @@ interface Props {
 
 export function NewProjectDialog({ open, onClose, onCreated }: Props) {
   const [name, setName] = useState('')
+  const [game, setGame] = useState<GameId>(DEFAULT_GAME)
   const [loading, setLoading] = useState(false)
   const { dispatch } = useProject()
   const inputRef = useRef<HTMLInputElement>(null)
@@ -19,6 +22,7 @@ export function NewProjectDialog({ open, onClose, onCreated }: Props) {
   useEffect(() => {
     if (open) {
       setName('')
+      setGame(DEFAULT_GAME)
       setTimeout(() => inputRef.current?.focus(), 50)
     }
   }, [open])
@@ -29,7 +33,7 @@ export function NewProjectDialog({ open, onClose, onCreated }: Props) {
     setLoading(true)
     try {
       const id = generateId()
-      const project = await createProject(trimmed, id)
+      const project = await createProject(trimmed, id, game)
       await setLastProjectId(id)
       dispatch({ type: 'ADD_PROJECT', payload: project })
       dispatch({ type: 'SET_ACTIVE_PROJECT', payload: project })
@@ -52,7 +56,31 @@ export function NewProjectDialog({ open, onClose, onCreated }: Props) {
             <X size={16} />
           </button>
         </div>
-        <div className="p-5">
+        <div className="space-y-4 p-5">
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Game</label>
+            <div className="grid grid-cols-2 gap-2">
+              {GAMES.map((g) => (
+                <button
+                  key={g.id}
+                  type="button"
+                  onClick={() => setGame(g.id)}
+                  className={cn(
+                    'rounded border px-3 py-2 text-left text-sm transition-colors',
+                    game === g.id
+                      ? 'border-primary bg-primary/10 text-foreground'
+                      : 'border-input bg-background text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  {g.name}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Определяет формат файлов, защищаемые коды, подсветку и промпт. Менять после создания нельзя.
+            </p>
+          </div>
+          <div>
           <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
             Project name
           </label>
@@ -64,6 +92,7 @@ export function NewProjectDialog({ open, onClose, onCreated }: Props) {
             placeholder="e.g. Droid Mod Translation"
             className="w-full rounded border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
           />
+          </div>
         </div>
         <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
           <button
