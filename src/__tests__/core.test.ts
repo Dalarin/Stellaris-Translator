@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { parseStellaris } from '@/parser/stellarisParser'
-import { serializeToStellaris, getExportPath } from '@/parser/stellarisSerializer'
+import { parseLoc as parseStellaris } from '@/parser/locParser'
+import { serializeLoc as serializeToStellaris, getExportPath } from '@/parser/locSerializer'
 import {
   applyTranslations,
   buildTranslationMemory,
@@ -10,14 +10,7 @@ import {
   splitValid,
   tokensMatch,
 } from '@/services/translationPrep'
-import {
-  buildChunks,
-  buildChunkPrompt,
-  formatChunk,
-  parseGlossarySuggestions,
-  parseResponse,
-  prepareRun,
-} from '@/services/geminiService'
+import { buildChunks, buildChunkPrompt, formatChunk, parseGlossarySuggestions, parseResponse, prepareRun } from '@/services/chunking'
 import { diffWords, similarity } from '@/utils/textDiff'
 import { checkEntries } from '@/utils/qaChecks'
 import type { TranslationEntry, TranslationFile } from '@/types'
@@ -71,7 +64,7 @@ describe('parser', () => {
 
 describe('serializer', () => {
   it('round-trips quotes, indexes and \\n', () => {
-    const src = 'l_english:\n a:0 "The \\"Void\\" Cult"\n b:3 "x\\ny"\n c "plain"\n'
+    const src = 'l_english:\n a:0 "The \\"Void\\" Cult"\n b:3 "x\\ny"\n c: "plain"\n'
     const parsed = parseStellaris(src)
     const out = serializeToStellaris(file(parsed.entries.map((e) => ({ ...e, translatedText: e.originalText }))), 'english')
     expect(out).toBe(src)

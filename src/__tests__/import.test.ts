@@ -5,9 +5,10 @@ import {
   findExistingFile,
   mergeEntry,
   type MergeContext,
-} from '@/hooks/useImport'
+} from '@/services/importMerge'
 import { buildTranslationMemory } from '@/services/translationPrep'
 import { estimateRun } from '@/services/estimate'
+import { getGameProfile } from '@/games'
 import type { TranslationEntry, TranslationFile } from '@/types'
 
 const entry = (over: Partial<TranslationEntry> & { key: string }): TranslationEntry => ({
@@ -35,6 +36,7 @@ function ctx(over: Partial<MergeContext> = {}): MergeContext {
     ruMap: new Map(),
     memory: new Map(),
     options: { markRuAsApproved: false, vanillaMemory: new Map() },
+    game: getGameProfile('stellaris'),
     ...over,
   }
 }
