@@ -1,15 +1,10 @@
+import { sleep } from '@/utils/async'
 import { GoogleGenAI } from '@google/genai'
 import { GeminiRateLimiter, DailyLimitExhaustedError, UnexpectedRateLimitError, FREE_MODEL } from '@/providers/GeminiRateLimiter'
 import { ApiKeyPool } from '@/providers/ApiKeyPool'
-import { GeminiError } from '@/services/geminiService'
-import {
-  formatChunk,
-  parseResponse,
-  parseGlossarySuggestions,
-  buildChunkPrompt,
-  prepareRun,
-  type TranslateOptions,
-} from '@/services/geminiService'
+import { GeminiError } from '@/services/geminiError'
+import { formatChunk, parseResponse, parseGlossarySuggestions, buildChunkPrompt, prepareRun } from '@/services/chunking'
+import { type TranslateOptions } from '@/services/translateTypes'
 import { splitValid } from '@/services/translationPrep'
 import type { TranslationEntry } from '@/types'
 
@@ -37,17 +32,6 @@ const NETWORK_RETRY_DELAYS_MS = [1000, 2000, 4000]
 const MAX_RPM_WAIT_ROUNDS = 3
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function sleep(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const t = setTimeout(resolve, ms)
-    signal?.addEventListener(
-      'abort',
-      () => { clearTimeout(t); reject(new DOMException('', 'AbortError')) },
-      { once: true },
-    )
-  })
-}
 
 /**
  * Retries fn on retryable non-429 errors with exponential backoff.

@@ -3,9 +3,11 @@ import { X, Sparkles, CheckCheck, AlertCircle } from 'lucide-react'
 import { useProject } from '@/store/ProjectContext'
 import { useGlossary } from '@/store/GlossaryContext'
 import { useApplyTranslations } from '@/hooks/useApplyTranslations'
+import { useGame } from '@/hooks/useGame'
 import { useGlossarySuggestions } from '@/hooks/useGlossarySuggestions'
 import { getBulkPrices, getGeminiSettings, setBulkPrices } from '@/db/operations'
-import { autoTranslateFile, GeminiError } from '@/services/geminiService'
+import { autoTranslateFile } from '@/services/geminiService'
+import { GeminiError } from '@/services/geminiError'
 import { loadRunConfig, mergeMemory, type RunConfig } from '@/services/runConfig'
 import { estimateCost, estimateRun, sumEstimates, type RunEstimate } from '@/services/estimate'
 import { cn } from '@/lib/utils'
@@ -43,6 +45,7 @@ export function BulkTranslateDialog({ open, onClose }: Props) {
   const { state: glossaryState } = useGlossary()
   const { apply, flush, getLatest } = useApplyTranslations()
   const projectId = projectState.activeProject?.id
+  const game = useGame()
   const { startRun: startGlossaryRun } = useGlossarySuggestions(projectId)
 
   const [config, setConfig] = useState<RunConfig | null>(null)
@@ -57,7 +60,7 @@ export function BulkTranslateDialog({ open, onClose }: Props) {
   useEffect(() => {
     if (!open || !projectId) return
     setResult(null)
-    loadRunConfig(projectId, projectState.files, glossaryState.entries).then(setConfig)
+    loadRunConfig(projectId, game, projectState.files, glossaryState.entries).then(setConfig)
     getBulkPrices().then((p) => {
       setInputPrice(p?.input ?? '')
       setOutputPrice(p?.output ?? '')
@@ -115,7 +118,7 @@ export function BulkTranslateDialog({ open, onClose }: Props) {
         if (ctrl.signal.aborted) break
         const file = (await getLatest(chosen[i].id)) ?? chosen[i]
         known.set(file.id, file)
-        const options = { ...config.options, memory: mergeMemory([...known.values()], config.vanilla), onGlossarySuggestions: onSuggestions }
+        const options = { ...config.options, memory: mergeMemory([...known.values()], config.vanilla, game), onGlossarySuggestions: onSuggestions }
         const name = file.relativePath.split('/').pop() ?? file.relativePath
         setRun({ fileIndex: i + 1, fileCount: chosen.length, fileName: name, chunk: 0, chunks: 0, translated: res.translated, failed: res.failed })
 

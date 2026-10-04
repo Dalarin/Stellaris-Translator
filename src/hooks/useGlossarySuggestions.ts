@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import { useGlossary } from '@/store/GlossaryContext'
 import { upsertGlossaryEntries } from '@/db/operations'
 import { generateId } from '@/utils/idHelpers'
-import type { GlossarySuggestion } from '@/services/geminiService'
+import type { GlossarySuggestion } from '@/services/translateTypes'
 import type { GlossaryEntry } from '@/types'
 
 /**

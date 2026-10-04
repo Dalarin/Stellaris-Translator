@@ -1,6 +1,6 @@
 import { Sparkles, Zap, Settings2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { TranslateProgress } from '@/services/geminiService'
+import type { TranslateProgress } from '@/services/translateTypes'
 import type { FreeTranslateProgress } from '@/services/freeGeminiService'
 
 export interface AIActionsProps {

@@ -1,3 +1,4 @@
+import { sleep } from '@/utils/async'
 export const FREE_MODEL = 'gemini-2.5-flash'
 // Informational constants — actual limits are enforced reactively via 429 responses
 export const FREE_RPM = 15
@@ -43,17 +44,6 @@ function parseRetryDelay(details: GeminiErrorDetail[]): number | null {
     }
   }
   return null
-}
-
-function sleep(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const t = setTimeout(resolve, ms)
-    signal?.addEventListener(
-      'abort',
-      () => { clearTimeout(t); reject(new DOMException('', 'AbortError')) },
-      { once: true },
-    )
-  })
 }
 
 // ─── GeminiRateLimiter ────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 import { CheckCheck, AlertCircle, RefreshCw, Sparkles, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { RETRY_DELAYS_S, type TranslateProgress, type TranslateResult } from '@/services/geminiService'
+import { RETRY_DELAYS_S } from '@/services/geminiError'
+import { type TranslateProgress, type TranslateResult } from '@/services/translateTypes'
 
 export interface TranslateOverlayProps {
   progress: TranslateProgress | null

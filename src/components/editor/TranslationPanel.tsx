@@ -1,27 +1,19 @@
-import { useEffect, useRef, useCallback, useState } from 'react'
+import { useEffect, useCallback } from 'react'
 import { useEditor } from '@/store/EditorContext'
 import { useProject } from '@/store/ProjectContext'
 import { useAutoMatch } from '@/hooks/useAutoMatch'
-import { useGlossary } from '@/store/GlossaryContext'
-import { upsertTranslationFile, getGeminiSettings } from '@/db/operations'
-import { type TranslateResult } from '@/services/geminiService'
-import { loadRunConfig } from '@/services/runConfig'
-import { useApplyTranslations } from '@/hooks/useApplyTranslations'
-import { useGlossarySuggestions } from '@/hooks/useGlossarySuggestions'
+import { useAutosave } from '@/hooks/useAutosave'
+import { useAiTranslate } from '@/hooks/useAiTranslate'
 import { ColorCodePreview } from './ColorCodePreview'
 import { GeminiSettingsDialog } from './GeminiSettingsDialog'
 import { AIActions } from './AIActions'
 import { EntryActions } from './EntryActions'
 import { TranslateOverlay } from './TranslateOverlay'
 import { FreeTranslateOverlay } from './FreeTranslateOverlay'
-import { autoTranslateFile, GeminiError, type TranslateProgress } from '@/services/geminiService'
-import { autoTranslateFree, type FreeTranslateProgress, type FreeTranslateResult } from '@/services/freeGeminiService'
 import { filterEntries } from '@/utils/progressCalc'
 import { cn } from '@/lib/utils'
 import { Wand2, Loader2 } from 'lucide-react'
 import type { EntryStatus } from '@/types'
-
-const AUTOSAVE_DELAY = 800
 
 const statusBorderClass: Record<EntryStatus, string> = {
   translated: 'border-green-500/40',
@@ -34,37 +26,10 @@ export function TranslationPanel() {
   const { state, dispatch } = useEditor()
   const { state: projectState, dispatch: projectDispatch } = useProject()
   const { isMatching, matchFile } = useAutoMatch()
-  const { state: glossaryState } = useGlossary()
   const entry = state.activeEntry
-  const { startRun: startGlossaryRun } = useGlossarySuggestions(state.activeFile?.projectId)
 
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const abortRef = useRef<AbortController | null>(null)
-  const freeAbortRef = useRef<AbortController | null>(null)
-
-  const [geminiSettingsOpen, setGeminiSettingsOpen] = useState(false)
-
-  const [translateProgress, setTranslateProgress] = useState<TranslateProgress | null>(null)
-  const [translateError, setTranslateError] = useState<string | null>(null)
-  const [translateDone, setTranslateDone] = useState<TranslateResult | null>(null)
-
-  const [freeProgress, setFreeProgress] = useState<FreeTranslateProgress | null>(null)
-  const [freeError, setFreeError] = useState<string | null>(null)
-  const [freeDone, setFreeDone] = useState<FreeTranslateResult | null>(null)
-
-  // ─── Auto-save ──────────────────────────────────────────────────────────────
-
-  useEffect(() => {
-    if (!state.dirty || !state.activeFile) return
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-    saveTimerRef.current = setTimeout(async () => {
-      if (!state.activeFile) return
-      await upsertTranslationFile(state.activeFile)
-      projectDispatch({ type: 'UPDATE_FILE', payload: state.activeFile })
-      dispatch({ type: 'SET_DIRTY', payload: false })
-    }, AUTOSAVE_DELAY)
-    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
-  }, [state.dirty, state.activeFile]) // eslint-disable-line
+  useAutosave()
+  const ai = useAiTranslate()
 
   // ─── Entry handlers ──────────────────────────────────────────────────────────
 
@@ -104,86 +69,6 @@ export function TranslationPanel() {
     if (entry) dispatch({ type: 'MARK_ENTRY_UNTRANSLATED', payload: entry.key })
   }, [entry, dispatch])
 
-  // ─── AI handlers ─────────────────────────────────────────────────────────────
-
-  const { apply: applyUpdatesToFile, flush: flushApplied } = useApplyTranslations()
-
-  const handleAutoTranslate = useCallback(async () => {
-    const file = state.activeFile
-    if (!file) return
-    const settings = await getGeminiSettings()
-    if (!settings?.apiKey) { setGeminiSettingsOpen(true); return }
-    const { basePrompt, options } = await loadRunConfig(
-      file.projectId,
-      projectState.files.map((f) => (f.id === file.id ? file : f)),
-      glossaryState.entries,
-      startGlossaryRun(),
-    )
-
-    setTranslateError(null)
-    setTranslateDone(null)
-    const ctrl = new AbortController()
-    abortRef.current = ctrl
-    try {
-      const result = await autoTranslateFile(
-        file.entries,
-        settings.apiKey,
-        settings.model,
-        basePrompt,
-        file.relativePath,
-        (p) => setTranslateProgress(p),
-        (updates) => { void applyUpdatesToFile(file.id, updates) },
-        ctrl.signal,
-        options,
-      )
-      await flushApplied()
-      setTranslateDone(result)
-    } catch (err) {
-      if (!ctrl.signal.aborted) setTranslateError(GeminiError.from(err).userMessage)
-    } finally {
-      setTranslateProgress(null)
-      abortRef.current = null
-    }
-  }, [state.activeFile, projectState.files, glossaryState.entries, startGlossaryRun, applyUpdatesToFile, flushApplied])
-
-  const handleFreeAutoTranslate = useCallback(async () => {
-    const file = state.activeFile
-    if (!file) return
-    const settings = await getGeminiSettings()
-    const freeApiKeys = settings?.freeApiKeys?.filter((k) => k.trim()) ?? []
-    if (freeApiKeys.length === 0) { setGeminiSettingsOpen(true); return }
-    const { basePrompt, options } = await loadRunConfig(
-      file.projectId,
-      projectState.files.map((f) => (f.id === file.id ? file : f)),
-      glossaryState.entries,
-      startGlossaryRun(),
-    )
-
-    setFreeError(null)
-    setFreeDone(null)
-    const ctrl = new AbortController()
-    freeAbortRef.current = ctrl
-    try {
-      const result = await autoTranslateFree(
-        file.entries,
-        freeApiKeys,
-        basePrompt,
-        file.relativePath,
-        (p) => setFreeProgress(p),
-        (updates) => { void applyUpdatesToFile(file.id, updates) },
-        ctrl.signal,
-        options,
-      )
-      await flushApplied()
-      setFreeDone(result)
-    } catch (err) {
-      if (!ctrl.signal.aborted) setFreeError(GeminiError.from(err).userMessage)
-    } finally {
-      setFreeProgress(null)
-      freeAbortRef.current = null
-    }
-  }, [state.activeFile, projectState.files, glossaryState.entries, startGlossaryRun, applyUpdatesToFile, flushApplied])
-
   // ─── Auto-match ─────────────────────────────────────────────────────────────
 
   const handleAutoMatch = useCallback(async () => {
@@ -211,25 +96,22 @@ export function TranslationPanel() {
 
   // ─── Shared overlays & dialogs ───────────────────────────────────────────────
 
-  const isTranslating = translateProgress !== null
-  const isFreeTranslating = freeProgress !== null
-
   const dialogs = (
     <>
-      {geminiSettingsOpen && <GeminiSettingsDialog onClose={() => setGeminiSettingsOpen(false)} />}
+      {ai.settingsOpen && <GeminiSettingsDialog onClose={ai.closeSettings} />}
       <TranslateOverlay
-        progress={translateProgress}
-        error={translateError}
-        done={translateDone}
-        onCancel={() => { abortRef.current?.abort(); setTranslateProgress(null); setTranslateError(null) }}
-        onDismiss={() => { setTranslateError(null); setTranslateDone(null) }}
+        progress={ai.paid.progress}
+        error={ai.paid.error}
+        done={ai.paid.done}
+        onCancel={ai.paid.cancel}
+        onDismiss={ai.paid.dismiss}
       />
       <FreeTranslateOverlay
-        progress={freeProgress}
-        error={freeError}
-        done={freeDone}
-        onCancel={() => { freeAbortRef.current?.abort(); setFreeProgress(null); setFreeError(null) }}
-        onDismiss={() => { setFreeError(null); setFreeDone(null) }}
+        progress={ai.free.progress}
+        error={ai.free.error}
+        done={ai.free.done}
+        onCancel={ai.free.cancel}
+        onDismiss={ai.free.dismiss}
       />
     </>
   )
@@ -247,13 +129,13 @@ export function TranslationPanel() {
 
   const aiActions = state.activeFile ? (
     <AIActions
-      isTranslating={isTranslating}
-      isFreeTranslating={isFreeTranslating}
-      translateProgress={translateProgress}
-      freeProgress={freeProgress}
-      onAutoTranslate={handleAutoTranslate}
-      onFreeAutoTranslate={handleFreeAutoTranslate}
-      onOpenSettings={() => setGeminiSettingsOpen(true)}
+      isTranslating={ai.paid.progress !== null}
+      isFreeTranslating={ai.free.progress !== null}
+      translateProgress={ai.paid.progress}
+      freeProgress={ai.free.progress}
+      onAutoTranslate={ai.paid.start}
+      onFreeAutoTranslate={ai.free.start}
+      onOpenSettings={ai.openSettings}
     />
   ) : null
 

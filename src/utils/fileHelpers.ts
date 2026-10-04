@@ -5,65 +5,52 @@ export function normalizePath(p: string): string {
   return p.replace(/\\/g, '/')
 }
 
+interface TreeDraft {
+  node: TreeNode
+  children: Map<string, TreeDraft>
+}
+
 export function buildFileTree(files: TranslationFile[]): TreeNode[] {
-  const root: Record<string, TreeNode> = {}
+  const root = new Map<string, TreeDraft>()
 
   for (const file of files) {
     const parts = normalizePath(file.relativePath).split('/')
-    let currentLevel = root
-    let currentPath = ''
+    let level = root
+    let path = ''
 
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i]
-      currentPath = currentPath ? `${currentPath}/${part}` : part
+    parts.forEach((part, i) => {
+      path = path ? `${path}/${part}` : part
       const isLast = i === parts.length - 1
 
-      if (!currentLevel[currentPath]) {
-        if (isLast) {
-          currentLevel[currentPath] = {
-            name: part,
-            path: currentPath,
-            type: 'file',
-            fileId: file.id,
-            stats: calcFileStats(file),
-          }
-        } else {
-          currentLevel[currentPath] = {
-            name: part,
-            path: currentPath,
-            type: 'folder',
-            children: [],
-          }
-        }
+      let draft = level.get(path)
+      if (!draft) {
+        const node: TreeNode = isLast
+          ? { name: part, path, type: 'file', fileId: file.id, stats: calcFileStats(file) }
+          : { name: part, path, type: 'folder', children: [] }
+        draft = { node, children: new Map() }
+        level.set(path, draft)
       }
-
-      if (!isLast && currentLevel[currentPath].type === 'folder') {
-        if (!currentLevel[currentPath]._childMap) {
-          currentLevel[currentPath]._childMap = {}
-        }
-        currentLevel = currentLevel[currentPath]._childMap!
-      }
-    }
+      level = draft.children
+    })
   }
 
-  function collectNodes(nodeMap: Record<string, TreeNode>): TreeNode[] {
-    return Object.values(nodeMap)
-      .map((node) => {
-        if (node.type === 'folder' && node._childMap) {
-          node.children = collectNodes(node._childMap)
-          delete node._childMap
-          // compute folder stats from children
-          node.stats = aggregateStats(node.children)
-        }
-        return node
-      })
-      .sort((a, b) => {
-        if (a.type !== b.type) return a.type === 'folder' ? -1 : 1
-        return a.name.localeCompare(b.name)
-      })
-  }
+  return finalizeLevel(root)
+}
 
-  return collectNodes(root)
+/** Turns drafts into sorted nodes (folders first) and rolls child stats up into folders. */
+function finalizeLevel(level: Map<string, TreeDraft>): TreeNode[] {
+  return Array.from(level.values())
+    .map(({ node, children }) => {
+      if (node.type === 'folder') {
+        node.children = finalizeLevel(children)
+        node.stats = aggregateStats(node.children)
+      }
+      return node
+    })
+    .sort((a, b) => {
+      if (a.type !== b.type) return a.type === 'folder' ? -1 : 1
+      return a.name.localeCompare(b.name)
+    })
 }
 
 function aggregateStats(nodes: TreeNode[]): FileStats {
@@ -78,13 +65,6 @@ function aggregateStats(nodes: TreeNode[]): FileStats {
     }
   }
   return stats
-}
-
-// Extend TreeNode with internal child map for building
-declare module '@/types' {
-  interface TreeNode {
-    _childMap?: Record<string, TreeNode>
-  }
 }
 
 export function getFilenameWithoutExtension(path: string): string {
